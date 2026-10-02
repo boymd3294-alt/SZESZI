@@ -1,59 +1,136 @@
-(/* =========================================================
-   SZESZI
-   Szigeti Endre Technikum
-   Fő alkalmazás JavaScript
-========================================================= */
-
 "use strict";
 
-
 /* =========================================================
-   ÁLLAPOT
+   SZESZI
+   Szigeti Endre Technikum
+   Supabase alapú frontend
 ========================================================= */
-
-const appState = {
-
-    currentView: "home",
-
-    currentUser: null,
-
-    currentChat: null,
-
-    searchTerm: "",
-
-    notifications: [],
-
-    isLoading: false
-
-};
 
 
 /* =========================================================
-   SEGÉDFÜGGVÉNYEK
+   SUPABASE ELLENŐRZÉS
 ========================================================= */
 
-function $(selector) {
-    return document.querySelector(selector);
+const SZESZI_CONFIG = window.SZESZI_SUPABASE || {};
+
+let supabaseClient = null;
+
+if (
+    window.supabase &&
+    SZESZI_CONFIG.url &&
+    SZESZI_CONFIG.anonKey
+) {
+    supabaseClient = window.supabase.createClient(
+        SZESZI_CONFIG.url,
+        SZESZI_CONFIG.anonKey
+    );
 }
 
 
-function $$(selector) {
-    return document.querySelectorAll(selector);
+/* =========================================================
+   DOM SEGÉDFÜGGVÉNYEK
+========================================================= */
+
+const $ = selector =>
+    document.querySelector(selector);
+
+const $$ = selector =>
+    document.querySelectorAll(selector);
+
+
+function escapeHTML(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 
-function escapeHTML(value = "") {
+function formatDate(date) {
 
-    const element = document.createElement("div");
+    if (!date) {
+        return "";
+    }
 
-    element.textContent = String(value);
+    const d = new Date(date);
 
-    return element.innerHTML;
+    if (Number.isNaN(d.getTime())) {
+        return "";
+    }
 
+    return new Intl.DateTimeFormat(
+        "hu-HU",
+        {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        }
+    ).format(d);
 }
 
 
-function showToast(message, type = "normal") {
+function timeAgo(date) {
+
+    if (!date) {
+        return "";
+    }
+
+    const now = Date.now();
+    const then = new Date(date).getTime();
+
+    const seconds = Math.floor(
+        (now - then) / 1000
+    );
+
+    if (seconds < 60) {
+        return "éppen most";
+    }
+
+    const minutes = Math.floor(
+        seconds / 60
+    );
+
+    if (minutes < 60) {
+        return `${minutes} perce`;
+    }
+
+    const hours = Math.floor(
+        minutes / 60
+    );
+
+    if (hours < 24) {
+        return `${hours} órája`;
+    }
+
+    const days = Math.floor(
+        hours / 24
+    );
+
+    if (days < 7) {
+        return `${days} napja`;
+    }
+
+    return formatDate(date);
+}
+
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+function showToast(
+    message,
+    type = "info"
+) {
 
     const toast = $("#toast");
 
@@ -61,32 +138,23 @@ function showToast(message, type = "normal") {
         return;
     }
 
-    toast.className = `toast ${type}`;
-
     toast.textContent = message;
 
-    clearTimeout(window.__szesziToast);
+    toast.className = "";
 
-    window.__szesziToast = setTimeout(() => {
+    toast.classList.add("show");
+    toast.classList.add(type);
 
-        toast.className = "toast";
-
-        toast.textContent = "";
-
-    }, 3000);
-
-}
-
-
-function setLoading(loading) {
-
-    appState.isLoading = loading;
-
-    document.body.classList.toggle(
-        "is-loading",
-        loading
+    clearTimeout(
+        window.__szesziToastTimer
     );
 
+    window.__szesziToastTimer =
+        setTimeout(() => {
+
+            toast.classList.remove("show");
+
+        }, 3500);
 }
 
 
@@ -97,7 +165,6 @@ function setLoading(loading) {
 function openModal(content) {
 
     const modal = $("#modal");
-
     const modalContent = $("#modalContent");
 
     if (!modal || !modalContent) {
@@ -108,8 +175,9 @@ function openModal(content) {
 
     modal.hidden = false;
 
-    document.body.classList.add("modal-open");
-
+    document.body.classList.add(
+        "modal-open"
+    );
 }
 
 
@@ -123,58 +191,84 @@ function closeModal() {
 
     modal.hidden = true;
 
-    document.body.classList.remove("modal-open");
+    document.body.classList.remove(
+        "modal-open"
+    );
+}
 
+
+function bindModalClose() {
+
+    document.addEventListener(
+        "click",
+        event => {
+
+            if (
+                event.target.matches(
+                    "[data-close-modal]"
+                )
+            ) {
+                closeModal();
+            }
+
+        }
+    );
 }
 
 
 /* =========================================================
-   AUTH FELÜLET
+   APP STATE
 ========================================================= */
 
-function showLogin() {
+const appState = {
 
-    const login = $("#loginView");
+    user: null,
 
-    const register = $("#registerView");
+    profile: null,
 
-    if (login) {
-        login.hidden = false;
-    }
+    currentView: "home",
 
-    if (register) {
-        register.hidden = true;
-    }
+    currentConversation: null,
 
-}
+    realtimeChannel: null,
 
+    notificationsChannel: null,
 
-function showRegister() {
+    searchTerm: "",
 
-    const login = $("#loginView");
+    posts: [],
 
-    const register = $("#registerView");
+    questions: [],
 
-    if (login) {
-        login.hidden = true;
-    }
+    conversations: [],
 
-    if (register) {
-        register.hidden = false;
-    }
+    groups: [],
 
-}
+    subjects: [],
+
+    materials: [],
+
+    announcements: [],
+
+    notifications: [],
+
+    savedPosts: [],
+
+    darkMode: false
+};
 
 
 /* =========================================================
-   AUTH KÉPERNYŐ
+   AUTH UI
 ========================================================= */
 
 function showAuthScreen() {
 
-    const authScreen = $("#authScreen");
+    const authScreen =
+        $("#authScreen");
 
-    const mainApp = $("#mainApp");
+    const mainApp =
+        $("#mainApp");
 
     if (authScreen) {
         authScreen.hidden = false;
@@ -183,19 +277,16 @@ function showAuthScreen() {
     if (mainApp) {
         mainApp.hidden = true;
     }
-
 }
 
 
-/* =========================================================
-   FŐ ALKALMAZÁS
-========================================================= */
-
 function showMainApp() {
 
-    const authScreen = $("#authScreen");
+    const authScreen =
+        $("#authScreen");
 
-    const mainApp = $("#mainApp");
+    const mainApp =
+        $("#mainApp");
 
     if (authScreen) {
         authScreen.hidden = true;
@@ -204,176 +295,273 @@ function showMainApp() {
     if (mainApp) {
         mainApp.hidden = false;
     }
+}
 
+
+function showLogin() {
+
+    const login =
+        $("#loginView");
+
+    const register =
+        $("#registerView");
+
+    if (login) {
+        login.hidden = false;
+    }
+
+    if (register) {
+        register.hidden = true;
+    }
+}
+
+
+function showRegister() {
+
+    const login =
+        $("#loginView");
+
+    const register =
+        $("#registerView");
+
+    if (login) {
+        login.hidden = true;
+    }
+
+    if (register) {
+        register.hidden = false;
+    }
 }
 
 
 /* =========================================================
-   SUPABASE ELLENŐRZÉS
+   SUPABASE HIBA
 ========================================================= */
 
-function isSupabaseReady() {
+function getErrorMessage(error) {
+
+    if (!error) {
+        return "Ismeretlen hiba történt.";
+    }
+
+    const message =
+        error.message ||
+        error.error_description ||
+        String(error);
+
+    const lower =
+        message.toLowerCase();
 
     if (
-        typeof window.SZESZI_SUPABASE === "undefined"
+        lower.includes("invalid login credentials")
     ) {
-
-        return false;
-
+        return "Helytelen e-mail cím vagy jelszó.";
     }
 
     if (
-        !window.SZESZI_SUPABASE.url ||
-        !window.SZESZI_SUPABASE.anonKey
+        lower.includes("email not confirmed")
     ) {
-
-        return false;
-
+        return "Az e-mail-címed még nincs megerősítve.";
     }
 
-    return true;
+    if (
+        lower.includes("user already registered")
+    ) {
+        return "Ezzel az e-mail-címmel már létezik fiók.";
+    }
 
+    if (
+        lower.includes("password")
+        &&
+        lower.includes("6")
+    ) {
+        return "A jelszónak legalább 6 karakteresnek kell lennie.";
+    }
+
+    return message;
 }
 
 
 /* =========================================================
-   SUPABASE KLIENS
+   AUTH – LOGIN
 ========================================================= */
 
-let supabaseClient = null;
+async function handleLogin(event) {
 
-
-async function initializeSupabase() {
-
-    if (!isSupabaseReady()) {
-
-        console.warn(
-            "A Supabase még nincs beállítva."
-        );
-
-        return false;
-
-    }
-
-
-    if (
-        typeof window.supabase === "undefined"
-    ) {
-
-        console.error(
-            "A Supabase könyvtár nem töltődött be."
-        );
-
-        return false;
-
-    }
-
-
-    try {
-
-        supabaseClient =
-            window.supabase.createClient(
-                window.SZESZI_SUPABASE.url,
-                window.SZESZI_SUPABASE.anonKey
-            );
-
-        return true;
-
-    } catch (error) {
-
-        console.error(
-            "Supabase inicializálási hiba:",
-            error
-        );
-
-        return false;
-
-    }
-
-}
-
-
-/* =========================================================
-   AUTH ÁLLAPOT LEKÉRÉSE
-========================================================= */
-
-async function checkAuth() {
+    event.preventDefault();
 
     if (!supabaseClient) {
 
-        showAuthScreen();
+        showToast(
+            "A Supabase még nincs beállítva.",
+            "error"
+        );
 
         return;
-
     }
 
+    const email =
+        $("#loginEmail")?.value.trim();
+
+    const password =
+        $("#loginPassword")?.value;
+
+    if (!email || !password) {
+
+        showToast(
+            "Töltsd ki az e-mail címet és a jelszót.",
+            "error"
+        );
+
+        return;
+    }
+
+    const submitButton =
+        event.submitter ||
+        event.target.querySelector(
+            'button[type="submit"]'
+        );
+
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent =
+            "Bejelentkezés...";
+    }
 
     try {
 
         const {
-            data,
             error
-        } = await supabaseClient.auth.getSession();
-
+        } =
+            await supabaseClient.auth.signInWithPassword({
+                email,
+                password
+            });
 
         if (error) {
-
-            console.error(
-                "Session hiba:",
-                error
-            );
-
-            showAuthScreen();
-
-            return;
-
+            throw error;
         }
 
-
-        if (
-            data &&
-            data.session &&
-            data.session.user
-        ) {
-
-            await loadCurrentUser(
-                data.session.user
-            );
-
-            showMainApp();
-
-            await initializeApplication();
-
-        } else {
-
-            showAuthScreen();
-
-        }
+        showToast(
+            "Sikeres bejelentkezés.",
+            "success"
+        );
 
     } catch (error) {
 
-        console.error(
-            "Auth ellenőrzési hiba:",
-            error
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
         );
 
-        showAuthScreen();
+    } finally {
 
+        if (submitButton) {
+
+            submitButton.disabled = false;
+
+            submitButton.textContent =
+                "Bejelentkezés";
+        }
     }
-
 }
 
 
 /* =========================================================
-   JELENLEGI FELHASZNÁLÓ BETÖLTÉSE
+   AUTH – REGISTER
 ========================================================= */
 
-async function loadCurrentUser(authUser) {
+async function handleRegister(event) {
 
-    if (!supabaseClient || !authUser) {
+    event.preventDefault();
 
-        return null;
+    if (!supabaseClient) {
 
+        showToast(
+            "A Supabase még nincs beállítva.",
+            "error"
+        );
+
+        return;
+    }
+
+    const name =
+        $("#registerName")?.value.trim();
+
+    const email =
+        $("#registerEmail")?.value.trim();
+
+    const password =
+        $("#registerPassword")?.value;
+
+    const passwordConfirm =
+        $("#registerPasswordConfirm")?.value;
+
+    const className =
+        $("#registerClass")?.value.trim();
+
+    const specialization =
+        $("#registerSpecialization")?.value.trim();
+
+
+    if (!name) {
+
+        showToast(
+            "Add meg a teljes neved.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (!email) {
+
+        showToast(
+            "Add meg az e-mail címed.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (!password || password.length < 6) {
+
+        showToast(
+            "A jelszónak legalább 6 karakteresnek kell lennie.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (password !== passwordConfirm) {
+
+        showToast(
+            "A két jelszó nem egyezik.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const submitButton =
+        event.submitter ||
+        event.target.querySelector(
+            'button[type="submit"]'
+        );
+
+    if (submitButton) {
+
+        submitButton.disabled = true;
+
+        submitButton.textContent =
+            "Regisztráció...";
     }
 
 
@@ -382,135 +570,265 @@ async function loadCurrentUser(authUser) {
         const {
             data,
             error
-        } = await supabaseClient
-            .from("profiles")
-            .select("*")
-            .eq("id", authUser.id)
-            .maybeSingle();
+        } =
+            await supabaseClient.auth.signUp({
+
+                email,
+
+                password,
+
+                options: {
+
+                    data: {
+
+                        name,
+
+                        class_name:
+                            className || null,
+
+                        specialization:
+                            specialization || null
+                    }
+                }
+            });
 
 
         if (error) {
-
-            console.error(
-                "Profil betöltési hiba:",
-                error
-            );
-
-            return null;
-
-        }
-
-
-        if (data) {
-
-            appState.currentUser = data;
-
-            updateUserInterface();
-
-            return data;
-
+            throw error;
         }
 
 
         /*
-         * Ha az auth felhasználóhoz még nincs profil,
-         * később itt lehet létrehozni.
+         * Ha a Supabase-nél ki van kapcsolva
+         * az e-mail megerősítés,
+         * akkor azonnal lehet session.
+         *
+         * Ha be van kapcsolva,
+         * a felhasználónak előbb meg kell erősítenie
+         * az e-mail címét.
          */
 
-        appState.currentUser = {
+        if (data.session) {
 
-            id: authUser.id,
+            await ensureProfile();
 
-            name:
-                authUser.user_metadata?.name ||
-                "Felhasználó",
+            showToast(
+                "Sikeres regisztráció.",
+                "success"
+            );
 
-            email: authUser.email || "",
+        } else {
 
-            role: "student",
+            showToast(
+                "A regisztráció sikerült. Ellenőrizd az e-mail címedet a megerősítéshez.",
+                "success"
+            );
 
-            class_name: "",
-
-            bio: "",
-
-            avatar_url: ""
-
-        };
-
-
-        updateUserInterface();
-
-        return appState.currentUser;
+            showLogin();
+        }
 
     } catch (error) {
 
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+
+    } finally {
+
+        if (submitButton) {
+
+            submitButton.disabled = false;
+
+            submitButton.textContent =
+                "Regisztráció";
+        }
+    }
+}
+
+
+/* =========================================================
+   AUTH – LOGOUT
+========================================================= */
+
+async function logout() {
+
+    if (!supabaseClient) {
+        return;
+    }
+
+    try {
+
+        await supabaseClient.auth.signOut();
+
+        appState.user = null;
+        appState.profile = null;
+
+        showAuthScreen();
+
+        showLogin();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   PROFILE BETÖLTÉS
+========================================================= */
+
+async function loadProfile() {
+
+    if (!supabaseClient || !appState.user) {
+        return null;
+    }
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("profiles")
+            .select("*")
+            .eq(
+                "id",
+                appState.user.id
+            )
+            .maybeSingle();
+
+
+    if (error) {
+
         console.error(
-            "Profil feldolgozási hiba:",
+            "Profil betöltési hiba:",
             error
         );
 
         return null;
-
     }
 
+
+    appState.profile = data;
+
+    return data;
 }
 
 
 /* =========================================================
-   FELHASZNÁLÓI FELÜLET FRISSÍTÉSE
+   PROFILE LÉTREHOZÁS
 ========================================================= */
 
-function updateUserInterface() {
+async function ensureProfile() {
 
-    const user = appState.currentUser;
-
-    if (!user) {
+    if (
+        !supabaseClient ||
+        !appState.user
+    ) {
         return;
     }
 
 
-    const avatar = $("#topAvatar");
+    const existing =
+        await loadProfile();
 
-    if (avatar) {
 
-        if (user.avatar_url) {
-
-            avatar.innerHTML = `
-                <img
-                    src="${escapeHTML(user.avatar_url)}"
-                    alt="Profilkép"
-                >
-            `;
-
-        } else {
-
-            avatar.textContent =
-                getInitials(
-                    user.name
-                );
-
-        }
-
+    if (existing) {
+        updateProfileUI();
+        return;
     }
 
 
-    const adminNav = $("#adminNav");
+    const metadata =
+        appState.user.user_metadata ||
+        {};
 
-    if (adminNav) {
 
-        adminNav.hidden =
-            user.role !== "admin";
+    const name =
+        metadata.name ||
+        appState.user.email ||
+        "Felhasználó";
 
+
+    const className =
+        metadata.class_name ||
+        null;
+
+
+    const specialization =
+        metadata.specialization ||
+        null;
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("profiles")
+            .insert({
+
+                id: appState.user.id,
+
+                name,
+
+                class_name:
+                    className,
+
+                bio: null,
+
+                avatar_url: null,
+
+                role: "student"
+
+            })
+            .select()
+            .single();
+
+
+    if (error) {
+
+        /*
+         * Ha trigger már létrehozta,
+         * akkor újra megpróbáljuk betölteni.
+         */
+
+        console.warn(
+            "Profil létrehozási figyelmeztetés:",
+            error
+        );
+
+        await loadProfile();
+
+        updateProfileUI();
+
+        return;
     }
 
+
+    appState.profile = data;
+
+    updateProfileUI();
 }
 
 
 /* =========================================================
-   MONOGRAM
+   PROFILE UI
 ========================================================= */
 
-function getInitials(name = "") {
+function getInitials(name) {
+
+    if (!name) {
+        return "?";
+    }
 
     const parts =
         name
@@ -527,9 +845,8 @@ function getInitials(name = "") {
     if (parts.length === 1) {
 
         return parts[0]
-            .substring(0, 2)
+            .slice(0, 2)
             .toUpperCase();
-
     }
 
 
@@ -537,822 +854,287 @@ function getInitials(name = "") {
         parts[0][0] +
         parts[parts.length - 1][0]
     ).toUpperCase();
-
 }
 
 
-/* =========================================================
-   BEJELENTKEZÉS
-========================================================= */
-
-async function handleLogin(event) {
-
-    event.preventDefault();
-
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    const email =
-        $("#loginEmail")?.value.trim();
-
-
-    const password =
-        $("#loginPassword")?.value;
-
-
-    if (!email || !password) {
-
-        showToast(
-            "Töltsd ki az összes mezőt.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    setLoading(true);
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient.auth.signInWithPassword({
-
-            email,
-
-            password
-
-        });
-
-
-        if (error) {
-
-            console.error(
-                "Bejelentkezési hiba:",
-                error
-            );
-
-            showToast(
-                translateAuthError(error),
-                "error"
-            );
-
-            return;
-
-        }
-
-
-        if (
-            data &&
-            data.user
-        ) {
-
-            await loadCurrentUser(
-                data.user
-            );
-
-            showMainApp();
-
-            await initializeApplication();
-
-            showToast(
-                "Sikeres bejelentkezés."
-            );
-
-        }
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Hiba történt a bejelentkezés során.",
-            "error"
-        );
-
-    } finally {
-
-        setLoading(false);
-
-    }
-
-}
-
-
-/* =========================================================
-   REGISZTRÁCIÓ
-========================================================= */
-
-async function handleRegister(event) {
-
-    event.preventDefault();
-
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
+function avatarHTML(
+    profile,
+    size = ""
+) {
 
     const name =
-        $("#registerName")?.value.trim();
+        profile?.name ||
+        "Felhasználó";
 
 
-    const email =
-        $("#registerEmail")?.value.trim();
+    const avatar =
+        profile?.avatar_url;
 
 
-    const className =
-        $("#registerClass")?.value.trim();
+    if (avatar) {
 
-
-    const role =
-        $("#registerRole")?.value || "student";
-
-
-    const password =
-        $("#registerPassword")?.value;
-
-
-    const passwordConfirm =
-        $("#registerPasswordConfirm")?.value;
-
-
-    if (
-        !name ||
-        !email ||
-        !className ||
-        !password ||
-        !passwordConfirm
-    ) {
-
-        showToast(
-            "Töltsd ki az összes mezőt.",
-            "error"
-        );
-
-        return;
-
+        return `
+            <div class="avatar ${size}">
+                <img
+                    src="${escapeHTML(avatar)}"
+                    alt="${escapeHTML(name)}"
+                >
+            </div>
+        `;
     }
 
 
-    if (password.length < 8) {
-
-        showToast(
-            "A jelszónak legalább 8 karakteresnek kell lennie.",
-            "error"
-        );
-
-        return;
-
-    }
+    return `
+        <div class="avatar ${size}">
+            ${escapeHTML(
+                getInitials(name)
+            )}
+        </div>
+    `;
+}
 
 
-    if (password !== passwordConfirm) {
+function updateProfileUI() {
 
-        showToast(
-            "A két jelszó nem egyezik.",
-            "error"
-        );
-
-        return;
-
-    }
+    const profile =
+        appState.profile;
 
 
-    setLoading(true);
+    const topAvatar =
+        $("#topAvatar");
 
 
-    try {
+    if (topAvatar && profile) {
 
-        /*
-         * A kliensből nem engedjük,
-         * hogy valaki admin szerepkört adjon magának.
-         */
+        if (profile.avatar_url) {
 
-        const safeRole =
-            role === "teacher"
-                ? "teacher"
-                : "student";
+            topAvatar.innerHTML = `
+                <img
+                    src="${escapeHTML(
+                        profile.avatar_url
+                    )}"
+                    alt="${escapeHTML(
+                        profile.name
+                    )}"
+                >
+            `;
 
+        } else {
 
-        const {
-            data,
-            error
-        } = await supabaseClient.auth.signUp({
-
-            email,
-
-            password,
-
-            options: {
-
-                data: {
-
-                    name,
-
-                    class_name: className,
-
-                    role: safeRole
-
-                }
-
-            }
-
-        });
-
-
-        if (error) {
-
-            console.error(
-                "Regisztrációs hiba:",
-                error
-            );
-
-            showToast(
-                translateAuthError(error),
-                "error"
-            );
-
-            return;
-
+            topAvatar.textContent =
+                getInitials(
+                    profile.name
+                );
         }
+    }
 
 
-        if (
-            data &&
-            data.user
-        ) {
+    const adminNav =
+        $("#adminNav");
 
-            /*
-             * A profil létrehozását az adatbázis
-             * trigger fogja kezelni.
-             */
 
-            showToast(
-                "A regisztráció sikeres. Ellenőrizd az e-mail-címedet, ha szükséges."
+    if (adminNav) {
+
+        adminNav.hidden =
+            !profile ||
+            ![
+                "admin",
+                "teacher"
+            ].includes(
+                profile.role
             );
-
-            showLogin();
-
-            const loginEmail =
-                $("#loginEmail");
-
-            if (loginEmail) {
-
-                loginEmail.value = email;
-
-            }
-
-        }
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Hiba történt a regisztráció során.",
-            "error"
-        );
-
-    } finally {
-
-        setLoading(false);
-
     }
-
 }
 
 
 /* =========================================================
-   AUTH HIBÁK MAGYARÍTÁSA
+   VIEW KEZELÉS
 ========================================================= */
 
-function translateAuthError(error) {
-
-    const message =
-        String(
-            error?.message || ""
-        ).toLowerCase();
-
-
-    if (
-        message.includes(
-            "invalid login credentials"
-        )
-    ) {
-
-        return "Helytelen e-mail-cím vagy jelszó.";
-
-    }
-
-
-    if (
-        message.includes(
-            "email not confirmed"
-        )
-    ) {
-
-        return "Az e-mail-címed még nincs megerősítve.";
-
-    }
-
-
-    if (
-        message.includes(
-            "user already registered"
-        )
-    ) {
-
-        return "Ezzel az e-mail-címmel már létezik fiók.";
-
-    }
-
-
-    if (
-        message.includes(
-            "password"
-        ) &&
-        message.includes(
-            "8"
-        )
-    ) {
-
-        return "A jelszónak legalább 8 karakteresnek kell lennie.";
-
-    }
-
-
-    return (
-        error?.message ||
-        "Ismeretlen hiba történt."
-    );
-
-}
-
-
-/* =========================================================
-   KIJELENTKEZÉS
-========================================================= */
-
-async function logout() {
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            error
-        } =
-            await supabaseClient.auth.signOut();
-
-
-        if (error) {
-
-            console.error(
-                "Kijelentkezési hiba:",
-                error
-            );
-
-            return;
-
-        }
-
-
-        appState.currentUser = null;
-
-        appState.currentChat = null;
-
-        showAuthScreen();
-
-        showLogin();
-
-        showToast(
-            "Sikeresen kijelentkeztél."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   OLDALSÁV
-========================================================= */
-
-function toggleSidebar() {
-
-    const sidebar = $("#sidebar");
-
-    if (!sidebar) {
-        return;
-    }
-
-    sidebar.classList.toggle("open");
-
-}
-
-
-function closeSidebar() {
-
-    const sidebar = $("#sidebar");
-
-    if (!sidebar) {
-        return;
-    }
-
-    sidebar.classList.remove("open");
-
-}
-
-
-/* =========================================================
-   NAVIGÁCIÓ
-========================================================= */
-
-async function navigate(view) {
-
-    if (!view) {
-        return;
-    }
-
-
-    if (
-        view === "admin" &&
-        appState.currentUser?.role !== "admin"
-    ) {
-
-        showToast(
-            "Ehhez a felülethez nincs jogosultságod.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    appState.currentView = view;
-
-    closeSidebar();
-
-    updateNavigation();
-
-    await renderCurrentView();
-
-}
-
-
-/* =========================================================
-   NAVIGÁCIÓ AKTÍV ÁLLAPOT
-========================================================= */
-
-function updateNavigation() {
+function setActiveNavigation(view) {
 
     $$(".nav-item").forEach(item => {
 
         item.classList.toggle(
             "active",
-            item.dataset.view ===
-                appState.currentView
+            item.dataset.view === view
         );
 
     });
 
 
-    $$(".mobile-bottom-nav [data-view]")
-        .forEach(item => {
+    $$(".bottom-nav button").forEach(item => {
 
-            item.classList.toggle(
-                "active",
-                item.dataset.view ===
-                    appState.currentView
-            );
+        item.classList.toggle(
+            "active",
+            item.dataset.view === view
+        );
 
-        });
-
+    });
 }
 
 
-/* =========================================================
-   FŐ OLDAL RENDER
-========================================================= */
+async function navigate(view) {
 
-async function renderCurrentView() {
+    appState.currentView =
+        view || "home";
 
-    const page = $("#page");
+
+    setActiveNavigation(
+        appState.currentView
+    );
+
+
+    closeMobileSidebar();
+
+
+    const page =
+        $("#page");
+
 
     if (!page) {
         return;
     }
 
 
-    setLoading(true);
+    page.innerHTML = `
+        <div class="loading-state">
+            Betöltés...
+        </div>
+    `;
 
 
     try {
 
-        switch (
-            appState.currentView
-        ) {
+        switch (appState.currentView) {
 
             case "home":
-
-                await renderHome(page);
-
+                await renderHome();
                 break;
-
 
             case "questions":
-
-                await renderQuestions(page);
-
+                await renderQuestions();
                 break;
-
 
             case "messages":
-
-                await renderMessages(page);
-
+                await renderMessages();
                 break;
-
 
             case "groups":
-
-                await renderGroups(page);
-
+                await renderGroups();
                 break;
-
 
             case "subjects":
-
-                await renderSubjects(page);
-
+                await renderSubjects();
                 break;
-
 
             case "materials":
-
-                await renderMaterials(page);
-
+                await renderMaterials();
                 break;
-
 
             case "announcements":
-
-                await renderAnnouncements(page);
-
+                await renderAnnouncements();
                 break;
-
 
             case "saved":
-
-                await renderSaved(page);
-
+                await renderSaved();
                 break;
-
 
             case "profile":
-
-                await renderProfile(page);
-
+                await renderProfile();
                 break;
-
 
             case "notifications":
-
-                await renderNotifications(page);
-
+                await renderNotifications();
                 break;
-
 
             case "settings":
-
-                await renderSettings(page);
-
+                await renderSettings();
                 break;
-
 
             case "admin":
-
-                await renderAdmin(page);
-
+                await renderAdmin();
                 break;
-
-
-            case "search":
-
-                await renderSearch(page);
-
-                break;
-
 
             default:
-
-                await renderHome(page);
-
+                await renderHome();
         }
 
     } catch (error) {
 
-        console.error(
-            "Oldal megjelenítési hiba:",
-            error
-        );
-
+        console.error(error);
 
         page.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    ⚠️
+                </div>
 
-            <div class="card">
-
-                <h2>
-                    Hiba történt
-                </h2>
-
-                <p class="muted">
-                    Az oldal betöltése közben hiba történt.
-                </p>
-
-            </div>
-
-        `;
-
-    } finally {
-
-        setLoading(false);
-
-    }
-
-}
-
-
-/* =========================================================
-   OLDAL FEJLÉC
-========================================================= */
-
-function pageHeader(
-    title,
-    description = "",
-    button = ""
-) {
-
-    return `
-
-        <div class="page-head">
-
-            <div>
-
-                <h1>
-                    ${escapeHTML(title)}
-                </h1>
-
-                ${
-                    description
-                        ? `
-                            <div class="muted">
-                                ${escapeHTML(description)}
-                            </div>
-                        `
-                        : ""
-                }
-
-            </div>
-
-            ${
-                button
-                    ? button
-                    : ""
-            }
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   KEZDŐLAP
-========================================================= */
-
-async function renderHome(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Kezdőlap",
-            "Az iskola közösségi felülete.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-create-post
-                >
-                    ＋ Bejegyzés
-                </button>
-            `
-        )}
-
-
-        <div class="card composer">
-
-            <span
-                id="composerAvatar"
-                class="avatar"
-            >
-                ?
-            </span>
-
-            <input
-                type="text"
-                placeholder="Mi újság?"
-                data-create-post
-                readonly
-            >
-
-            <button
-                type="button"
-                class="btn secondary"
-                data-create-post
-            >
-                Írás
-            </button>
-
-        </div>
-
-
-        <div
-            id="feed"
-            class="feed"
-        >
-
-            <div class="card empty">
+                <h2>Nem sikerült betölteni az oldalt</h2>
 
                 <p>
-                    Még nincsenek bejegyzések.
+                    ${escapeHTML(
+                        getErrorMessage(error)
+                    )}
                 </p>
-
-                <p class="muted">
-                    Legyél az első, aki megoszt valamit az iskolai közösséggel!
-                </p>
-
             </div>
-
-        </div>
-
-    `;
-
-
-    updateComposerAvatar();
+        `;
+    }
+}
 
 
-    if (!supabaseClient) {
+/* =========================================================
+   MOBILE SIDEBAR
+========================================================= */
+
+function toggleSidebar() {
+
+    const sidebar =
+        $("#sidebar");
+
+    if (!sidebar) {
         return;
     }
 
+    sidebar.classList.toggle(
+        "open"
+    );
+}
 
-    try {
 
-        const {
-            data,
-            error
-        } = await supabaseClient
+function closeMobileSidebar() {
 
+    const sidebar =
+        $("#sidebar");
+
+    if (!sidebar) {
+        return;
+    }
+
+    sidebar.classList.remove(
+        "open"
+    );
+}
+
+
+/* =========================================================
+   HOME
+========================================================= */
+
+async function renderHome() {
+
+    const page =
+        $("#page");
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
             .from("posts")
-
             .select(`
-                id,
-                body,
-                image_url,
-                created_at,
-                author_id,
+                *,
                 profiles (
                     id,
                     name,
@@ -1361,186 +1143,162 @@ async function renderHome(page) {
                     avatar_url
                 )
             `)
-
             .order(
                 "created_at",
                 {
                     ascending: false
                 }
-            );
+            )
+            .limit(50);
 
 
-        if (error) {
-
-            console.error(
-                "Bejegyzések betöltési hiba:",
-                error
-            );
-
-            return;
-
-        }
-
-
-        const feed =
-            $("#feed");
-
-
-        if (!feed) {
-            return;
-        }
-
-
-        if (!data || !data.length) {
-
-            return;
-
-        }
-
-
-        feed.innerHTML =
-            data
-                .map(
-                    renderPost
-                )
-                .join("");
-
-
-        await loadPostInteractions();
-
-    } catch (error) {
-
-        console.error(error);
-
+    if (error) {
+        throw error;
     }
 
+
+    appState.posts =
+        data || [];
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Kezdőlap</h1>
+
+                <p>
+                    Mi újság a SZESZI-ben?
+                </p>
+
+            </div>
+
+        </div>
+
+
+        ${renderComposer()}
+
+
+        <div id="feed">
+
+            ${
+                appState.posts.length
+                ?
+                appState.posts
+                    .map(renderPost)
+                    .join("")
+                :
+                renderEmptyState(
+                    "📝",
+                    "Még nincs bejegyzés",
+                    "Legyél te az első, aki közzétesz valamit."
+                )
+            }
+
+        </div>
+    `;
 }
 
 
 /* =========================================================
-   COMPOSER AVATAR
+   POST COMPOSER
 ========================================================= */
 
-function updateComposerAvatar() {
+function renderComposer() {
 
-    const avatar =
-        $("#composerAvatar");
-
-
-    if (!avatar) {
-        return;
-    }
+    const name =
+        appState.profile?.name ||
+        "Felhasználó";
 
 
-    const user =
-        appState.currentUser;
+    return `
 
+        <section class="composer card">
 
-    if (!user) {
+            <div class="composer-top">
 
-        avatar.textContent = "?";
+                ${avatarHTML(
+                    appState.profile,
+                    "small"
+                )}
 
-        return;
+                <button
+                    class="composer-input"
+                    type="button"
+                    data-action="open-post-modal"
+                >
+                    Mire gondolsz, ${escapeHTML(
+                        name.split(" ")[0]
+                    )}?
+                </button>
 
-    }
+            </div>
 
-
-    if (user.avatar_url) {
-
-        avatar.innerHTML = `
-
-            <img
-                src="${escapeHTML(user.avatar_url)}"
-                alt="Profilkép"
-            >
-
-        `;
-
-    } else {
-
-        avatar.textContent =
-            getInitials(
-                user.name
-            );
-
-    }
-
+        </section>
+    `;
 }
 
 
 /* =========================================================
-   POST HTML
+   POST RENDER
 ========================================================= */
 
 function renderPost(post) {
 
-    const author =
-        post.profiles || {};
+    const profile =
+        post.profiles ||
+        {};
 
 
-    const avatar =
-        author.avatar_url
-
-            ? `
-                <img
-                    src="${escapeHTML(author.avatar_url)}"
-                    alt="Profilkép"
-                >
-            `
-
-            : escapeHTML(
-                getInitials(
-                    author.name || "?"
-                )
-            );
-
-
-    const date =
-        formatDate(
-            post.created_at
+    const body =
+        escapeHTML(
+            post.body
+        ).replaceAll(
+            "\n",
+            "<br>"
         );
 
 
     return `
 
         <article
-            class="card post"
-            data-post-id="${escapeHTML(post.id)}"
+            class="post-card card"
+            data-post-id="${post.id}"
         >
 
+            <div class="post-header">
 
-            <div class="post-head">
+                ${avatarHTML(
+                    profile,
+                    "small"
+                )}
 
-                <div class="avatar">
+                <div class="post-author">
 
-                    ${avatar}
-
-                </div>
-
-
-                <div class="post-meta">
-
-                    <b>
+                    <strong>
                         ${escapeHTML(
-                            author.name ||
-                            "Ismeretlen felhasználó"
+                            profile.name ||
+                            "Felhasználó"
                         )}
-                    </b>
+                    </strong>
 
                     <span>
 
-                        ${escapeHTML(
-                            author.class_name ||
-                            ""
-                        )}
-
                         ${
-                            author.class_name
-                                ? " · "
-                                : ""
+                            profile.class_name
+                            ?
+                            escapeHTML(
+                                profile.class_name
+                            ) + " · "
+                            :
+                            ""
                         }
 
-                        ${escapeHTML(date)}
+                        ${timeAgo(
+                            post.created_at
+                        )}
 
                     </span>
 
@@ -1551,183 +1309,114 @@ function renderPost(post) {
 
             <div class="post-body">
 
-                ${escapeHTML(
-                    post.body
-                )}
+                <p>
+                    ${body}
+                </p>
 
-            </div>
-
-
-            ${
-                post.image_url
-
-                    ? `
-
+                ${
+                    post.image_url
+                    ?
+                    `
                         <img
                             class="post-image"
-                            src="${escapeHTML(post.image_url)}"
+                            src="${escapeHTML(
+                                post.image_url
+                            )}"
                             alt="Bejegyzés képe"
-                            loading="lazy"
                         >
-
                     `
+                    :
+                    ""
+                }
 
-                    : ""
-            }
+            </div>
 
 
             <div class="post-actions">
 
                 <button
                     type="button"
-                    class="action"
-                    data-like-post="${escapeHTML(post.id)}"
+                    data-action="like-post"
+                    data-id="${post.id}"
                 >
-                    ❤️
-                    <span data-like-count>
-                        0
+                    👍
+                    <span>
+                        Tetszik
                     </span>
                 </button>
 
 
                 <button
                     type="button"
-                    class="action"
-                    data-comment-post="${escapeHTML(post.id)}"
+                    data-action="open-comments"
+                    data-id="${post.id}"
                 >
                     💬
                     <span>
-                        Hozzászólás
+                        Komment
                     </span>
                 </button>
 
 
                 <button
                     type="button"
-                    class="action"
-                    data-share-post="${escapeHTML(post.id)}"
+                    data-action="save-post"
+                    data-id="${post.id}"
                 >
-                    ↗
+                    🔖
+                    <span>
+                        Mentés
+                    </span>
+                </button>
+
+
+                <button
+                    type="button"
+                    data-action="share-post"
+                    data-id="${post.id}"
+                >
+                    ↗️
                     <span>
                         Megosztás
                     </span>
-                </button>
-
-
-                <button
-                    type="button"
-                    class="action"
-                    data-save-post="${escapeHTML(post.id)}"
-                >
-                    🔖
                 </button>
 
             </div>
 
 
             <div
-                class="comments"
-                data-comments="${escapeHTML(post.id)}"
+                class="post-comments"
+                id="comments-${post.id}"
+                hidden
             ></div>
 
-
         </article>
-
     `;
-
 }
 
 
 /* =========================================================
-   DÁTUM FORMÁZÁSA
+   ÚJ BEJEGYZÉS
 ========================================================= */
 
-function formatDate(dateValue) {
-
-    if (!dateValue) {
-        return "";
-    }
-
-
-    const date =
-        new Date(dateValue);
-
-
-    if (Number.isNaN(
-        date.getTime()
-    )) {
-
-        return "";
-
-    }
-
-
-    return date.toLocaleString(
-        "hu-HU",
-        {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
-        }
-    );
-
-}
-
-
-/* =========================================================
-   POST INTERAKCIÓK
-========================================================= */
-
-async function loadPostInteractions() {
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    /*
-     * A tényleges reakciók és kommentek
-     * a Supabase-ből kerülnek majd ide.
-     *
-     * A funkció azért külön van választva,
-     * hogy később könnyen bővíthető legyen.
-     */
-
-}
-
-
-/* =========================================================
-   BEJEGYZÉS LÉTREHOZÁSA
-========================================================= */
-
-function openCreatePost() {
-
-    if (!appState.currentUser) {
-
-        showToast(
-            "A bejegyzés létrehozásához be kell jelentkezned.",
-            "error"
-        );
-
-        return;
-
-    }
-
+function openPostModal() {
 
     openModal(`
 
-        <h2>
-            Új bejegyzés
-        </h2>
+        <div class="modal-header">
+
+            <h2>
+                Új bejegyzés
+            </h2>
+
+            <p>
+                Ossz meg valamit a SZESZI közösségével.
+            </p>
+
+        </div>
 
 
-        <form
-            id="createPostForm"
-            class="form"
-        >
-
+        <form id="createPostForm">
 
             <div class="form-group">
 
@@ -1737,7 +1426,9 @@ function openCreatePost() {
 
                 <textarea
                     id="postBody"
-                    placeholder="Mit szeretnél megosztani az iskolai közösséggel?"
+                    rows="6"
+                    maxlength="5000"
+                    placeholder="Írj valamit..."
                     required
                 ></textarea>
 
@@ -1751,74 +1442,33 @@ function openCreatePost() {
                 </label>
 
                 <input
-                    type="url"
                     id="postImageUrl"
+                    type="url"
                     placeholder="https://..."
                 >
+
+                <small>
+                    A valódi fájlfeltöltést a Supabase Storage következő részében kapcsoljuk be.
+                </small>
 
             </div>
 
 
             <button
+                class="primary-btn full-width"
                 type="submit"
-                class="btn full-width"
             >
                 Közzététel
             </button>
 
-
         </form>
-
     `);
-
-
-    const form =
-        $("#createPostForm");
-
-
-    if (form) {
-
-        form.addEventListener(
-            "submit",
-            handleCreatePost
-        );
-
-    }
-
 }
 
 
-/* =========================================================
-   BEJEGYZÉS MENTÉSE
-========================================================= */
-
-async function handleCreatePost(event) {
+async function createPost(event) {
 
     event.preventDefault();
-
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (!appState.currentUser) {
-
-        showToast(
-            "Először jelentkezz be.",
-            "error"
-        );
-
-        return;
-
-    }
 
 
     const body =
@@ -1826,148 +1476,108 @@ async function handleCreatePost(event) {
 
 
     const imageUrl =
-        $("#postImageUrl")?.value.trim();
+        $("#postImageUrl")?.value.trim() ||
+        null;
 
 
     if (!body) {
 
         showToast(
-            "Írd le, mit szeretnél megosztani.",
+            "A bejegyzés nem lehet üres.",
             "error"
         );
 
         return;
-
     }
-
-
-    setLoading(true);
 
 
     try {
 
         const {
             error
-        } = await supabaseClient
+        } =
+            await supabaseClient
+                .from("posts")
+                .insert({
 
-            .from("posts")
+                    author_id:
+                        appState.user.id,
 
-            .insert({
+                    body,
 
-                author_id:
-                    appState.currentUser.id,
+                    image_url:
+                        imageUrl
 
-                body,
-
-                image_url:
-                    imageUrl || null
-
-            });
+                });
 
 
         if (error) {
-
-            console.error(
-                "Bejegyzés létrehozási hiba:",
-                error
-            );
-
-            showToast(
-                "Nem sikerült közzétenni a bejegyzést.",
-                "error"
-            );
-
-            return;
-
+            throw error;
         }
 
 
         closeModal();
 
         showToast(
-            "A bejegyzés közzétéve."
+            "Bejegyzés közzétéve.",
+            "success"
         );
 
-        await renderCurrentView();
+
+        if (
+            appState.currentView ===
+            "home"
+        ) {
+            await renderHome();
+        }
 
     } catch (error) {
 
         console.error(error);
 
         showToast(
-            "Hiba történt a bejegyzés létrehozásakor.",
+            getErrorMessage(error),
             "error"
         );
-
-    } finally {
-
-        setLoading(false);
-
     }
-
 }
 
 
 /* =========================================================
-   KÉRDÉSEK
+   KOMMENTEK
 ========================================================= */
 
-async function renderQuestions(page) {
+async function loadComments(
+    postId
+) {
 
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Kérdések",
-            "Kérdezz, válaszolj és segíts másoknak.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-create-question
-                >
-                    ＋ Kérdés
-                </button>
-            `
-        )}
+    const container =
+        $(`#comments-${postId}`);
 
 
-        <div
-            id="questionsList"
-        >
-
-            <div class="card empty">
-
-                Még nincsenek feltett kérdések.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
+    if (!container) {
         return;
     }
 
 
-    try {
+    container.hidden = false;
 
-        const {
-            data,
-            error
-        } = await supabaseClient
 
-            .from("questions")
+    container.innerHTML = `
+        <div class="loading-state">
+            Kommentek betöltése...
+        </div>
+    `;
 
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("comments")
             .select(`
-                id,
-                title,
-                body,
-                subject,
-                solved,
-                created_at,
-                author_id,
+                *,
                 profiles (
                     id,
                     name,
@@ -1975,7 +1585,466 @@ async function renderQuestions(page) {
                     avatar_url
                 )
             `)
+            .eq(
+                "post_id",
+                postId
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
 
+
+    if (error) {
+
+        container.innerHTML = `
+            <div class="error-text">
+                ${escapeHTML(
+                    getErrorMessage(error)
+                )}
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML = `
+
+        <div class="comments-list">
+
+            ${
+                data?.length
+                ?
+                data.map(comment => `
+
+                    <div class="comment">
+
+                        ${avatarHTML(
+                            comment.profiles,
+                            "tiny"
+                        )}
+
+                        <div>
+
+                            <strong>
+                                ${escapeHTML(
+                                    comment.profiles?.name ||
+                                    "Felhasználó"
+                                )}
+                            </strong>
+
+                            <p>
+                                ${escapeHTML(
+                                    comment.body
+                                )}
+                            </p>
+
+                            <small>
+                                ${timeAgo(
+                                    comment.created_at
+                                )}
+                            </small>
+
+                        </div>
+
+                    </div>
+
+                `).join("")
+                :
+                `
+                    <div class="empty-inline">
+                        Még nincs komment.
+                    </div>
+                `
+            }
+
+        </div>
+
+
+        <form
+            class="comment-form"
+            data-comment-form="${postId}"
+        >
+
+            <input
+                type="text"
+                placeholder="Írj egy kommentet..."
+                maxlength="2000"
+                required
+            >
+
+            <button
+                type="submit"
+                class="primary-btn"
+            >
+                Küldés
+            </button>
+
+        </form>
+    `;
+}
+
+
+async function createComment(
+    event,
+    postId
+) {
+
+    event.preventDefault();
+
+
+    const input =
+        event.target.querySelector(
+            "input"
+        );
+
+
+    const body =
+        input?.value.trim();
+
+
+    if (!body) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("comments")
+                .insert({
+
+                    post_id:
+                        postId,
+
+                    author_id:
+                        appState.user.id,
+
+                    body
+
+                });
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        input.value = "";
+
+        await loadComments(
+            postId
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   REAKCIÓ
+========================================================= */
+
+async function toggleLike(
+    postId
+) {
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("post_reactions")
+                .select("post_id")
+                .eq(
+                    "post_id",
+                    postId
+                )
+                .eq(
+                    "user_id",
+                    appState.user.id
+                )
+                .maybeSingle();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        if (data) {
+
+            const {
+                error: deleteError
+            } =
+                await supabaseClient
+                    .from("post_reactions")
+                    .delete()
+                    .eq(
+                        "post_id",
+                        postId
+                    )
+                    .eq(
+                        "user_id",
+                        appState.user.id
+                    );
+
+
+            if (deleteError) {
+                throw deleteError;
+            }
+
+
+            showToast(
+                "Reakció eltávolítva.",
+                "info"
+            );
+
+        } else {
+
+            const {
+                error: insertError
+            } =
+                await supabaseClient
+                    .from("post_reactions")
+                    .insert({
+
+                        post_id:
+                            postId,
+
+                        user_id:
+                            appState.user.id,
+
+                        reaction:
+                            "like"
+
+                    });
+
+
+            if (insertError) {
+                throw insertError;
+            }
+
+
+            showToast(
+                "👍 Reakció hozzáadva.",
+                "success"
+            );
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   MENTÉS
+========================================================= */
+
+async function toggleSavePost(
+    postId
+) {
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("saved_posts")
+                .select("post_id")
+                .eq(
+                    "post_id",
+                    postId
+                )
+                .eq(
+                    "user_id",
+                    appState.user.id
+                )
+                .maybeSingle();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        if (data) {
+
+            const {
+                error: deleteError
+            } =
+                await supabaseClient
+                    .from("saved_posts")
+                    .delete()
+                    .eq(
+                        "post_id",
+                        postId
+                    )
+                    .eq(
+                        "user_id",
+                        appState.user.id
+                    );
+
+
+            if (deleteError) {
+                throw deleteError;
+            }
+
+
+            showToast(
+                "Eltávolítva a mentésekből.",
+                "info"
+            );
+
+        } else {
+
+            const {
+                error: insertError
+            } =
+                await supabaseClient
+                    .from("saved_posts")
+                    .insert({
+
+                        user_id:
+                            appState.user.id,
+
+                        post_id:
+                            postId
+
+                    });
+
+
+            if (insertError) {
+                throw insertError;
+            }
+
+
+            showToast(
+                "Bejegyzés elmentve.",
+                "success"
+            );
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   MEGOSZTÁS
+========================================================= */
+
+async function sharePost(
+    postId
+) {
+
+    const url =
+        `${window.location.origin}${window.location.pathname}#post-${postId}`;
+
+
+    try {
+
+        if (
+            navigator.share
+        ) {
+
+            await navigator.share({
+
+                title:
+                    "SZESZI bejegyzés",
+
+                url
+
+            });
+
+        } else if (
+            navigator.clipboard
+        ) {
+
+            await navigator.clipboard.writeText(
+                url
+            );
+
+            showToast(
+                "A bejegyzés linkje kimásolva.",
+                "success"
+            );
+        }
+
+    } catch (error) {
+
+        if (
+            error?.name !==
+            "AbortError"
+        ) {
+
+            console.error(error);
+
+            showToast(
+                "A megosztás nem sikerült.",
+                "error"
+            );
+        }
+    }
+}
+
+
+/* =========================================================
+   QUESTIONS
+========================================================= */
+
+async function renderQuestions() {
+
+    const page =
+        $("#page");
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("questions")
+            .select(`
+                *,
+                profiles (
+                    id,
+                    name,
+                    class_name,
+                    avatar_url
+                )
+            `)
             .order(
                 "created_at",
                 {
@@ -1984,113 +2053,96 @@ async function renderQuestions(page) {
             );
 
 
-        if (error) {
-
-            console.error(
-                "Kérdések betöltési hiba:",
-                error
-            );
-
-            return;
-
-        }
-
-
-        const container =
-            $("#questionsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    renderQuestion
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
+    if (error) {
+        throw error;
     }
 
+
+    appState.questions =
+        data || [];
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Kérdések</h1>
+
+                <p>
+                    Tegyél fel kérdést, vagy segíts másoknak.
+                </p>
+
+            </div>
+
+
+            <button
+                class="primary-btn"
+                data-action="open-question-modal"
+                type="button"
+            >
+                ＋ Kérdés feltevése
+            </button>
+
+        </div>
+
+
+        <div class="questions-list">
+
+            ${
+                appState.questions.length
+                ?
+                appState.questions
+                    .map(renderQuestion)
+                    .join("")
+                :
+                renderEmptyState(
+                    "❓",
+                    "Még nincs kérdés",
+                    "Tegyél fel egy kérdést a közösségnek."
+                )
+            }
+
+        </div>
+    `;
 }
 
 
-/* =========================================================
-   KÉRDÉS HTML
-========================================================= */
-
 function renderQuestion(question) {
 
-    const author =
-        question.profiles || {};
+    const profile =
+        question.profiles ||
+        {};
 
 
     return `
 
-        <article class="card question">
+        <article
+            class="question-card card"
+            data-question-id="${question.id}"
+        >
 
+            <div class="question-header">
 
-            <div class="post-head">
+                ${avatarHTML(
+                    profile,
+                    "small"
+                )}
 
-                <div class="avatar">
+                <div>
 
-                    ${
-                        author.avatar_url
-
-                            ? `
-                                <img
-                                    src="${escapeHTML(author.avatar_url)}"
-                                    alt="Profilkép"
-                                >
-                            `
-
-                            : escapeHTML(
-                                getInitials(
-                                    author.name || "?"
-                                )
-                            )
-                    }
-
-                </div>
-
-
-                <div class="post-meta">
-
-                    <b>
+                    <strong>
                         ${escapeHTML(
-                            author.name ||
-                            "Ismeretlen"
+                            profile.name ||
+                            "Felhasználó"
                         )}
-                    </b>
+                    </strong>
 
                     <span>
-
-                        ${escapeHTML(
-                            question.subject ||
-                            "Általános"
+                        ${timeAgo(
+                            question.created_at
                         )}
-
-                        ·
-
-                        ${escapeHTML(
-                            formatDate(
-                                question.created_at
-                            )
-                        )}
-
                     </span>
 
                 </div>
@@ -2098,71 +2150,91 @@ function renderQuestion(question) {
 
                 ${
                     question.solved
-
-                        ? `
-                            <span class="tag">
-                                ✓ Megoldva
-                            </span>
-                        `
-
-                        : ""
+                    ?
+                    `
+                        <span class="status-badge success">
+                            Megoldva
+                        </span>
+                    `
+                    :
+                    `
+                        <span class="status-badge">
+                            Nyitott
+                        </span>
+                    `
                 }
 
             </div>
 
 
-            <h2>
-                ${escapeHTML(
-                    question.title
-                )}
-            </h2>
+            <div class="question-content">
+
+                ${
+                    question.subject
+                    ?
+                    `
+                        <span class="subject-badge">
+                            ${escapeHTML(
+                                question.subject
+                            )}
+                        </span>
+                    `
+                    :
+                    ""
+                }
 
 
-            <p class="post-body">
-
-                ${escapeHTML(
-                    question.body
-                )}
-
-            </p>
+                <h3>
+                    ${escapeHTML(
+                        question.title
+                    )}
+                </h3>
 
 
-            <hr>
+                <p>
+                    ${escapeHTML(
+                        question.body
+                    )}
+                </p>
+
+            </div>
 
 
-            <button
-                type="button"
-                class="btn secondary small"
-                data-answer-question="${escapeHTML(question.id)}"
-            >
-                Válasz írása
-            </button>
+            <div class="question-actions">
 
+                <button
+                    type="button"
+                    data-action="open-question"
+                    data-id="${question.id}"
+                >
+                    💬 Válaszok
+                </button>
+
+            </div>
 
         </article>
-
     `;
-
 }
 
 
-/* =========================================================
-   ÚJ KÉRDÉS
-========================================================= */
-
-function openCreateQuestion() {
+function openQuestionModal() {
 
     openModal(`
 
-        <h2>
-            Új kérdés
-        </h2>
+        <div class="modal-header">
+
+            <h2>
+                Kérdés feltevése
+            </h2>
+
+            <p>
+                A kérdésedet a SZESZI közössége láthatja.
+            </p>
+
+        </div>
 
 
-        <form
-            id="createQuestionForm"
-        >
-
+        <form id="createQuestionForm">
 
             <div class="form-group">
 
@@ -2172,8 +2244,10 @@ function openCreateQuestion() {
 
                 <input
                     id="questionTitle"
+                    type="text"
+                    maxlength="200"
+                    placeholder="Mi a kérdésed?"
                     required
-                    placeholder="Pl. Hogyan működik az INNER JOIN?"
                 >
 
             </div>
@@ -2187,7 +2261,9 @@ function openCreateQuestion() {
 
                 <input
                     id="questionSubject"
-                    placeholder="Pl. Adatbázis-kezelés"
+                    type="text"
+                    maxlength="100"
+                    placeholder="Például: Programozás"
                 >
 
             </div>
@@ -2196,13 +2272,15 @@ function openCreateQuestion() {
             <div class="form-group">
 
                 <label for="questionBody">
-                    Kérdés részletesen
+                    Részletek
                 </label>
 
                 <textarea
                     id="questionBody"
+                    rows="7"
+                    maxlength="5000"
+                    placeholder="Írd le részletesen..."
                     required
-                    placeholder="Írd le részletesen, miben szeretnél segítséget."
                 ></textarea>
 
             </div>
@@ -2210,2841 +2288,1502 @@ function openCreateQuestion() {
 
             <button
                 type="submit"
-                class="btn full-width"
+                class="primary-btn full-width"
             >
                 Kérdés közzététele
             </button>
 
-
         </form>
-
     `);
-
-
-    $("#createQuestionForm")
-        ?.addEventListener(
-            "submit",
-            handleCreateQuestion
-        );
-
 }
 
 
-/* =========================================================
-   KÉRDÉS MENTÉSE
-========================================================= */
-
-async function handleCreateQuestion(event) {
+async function createQuestion(
+    event
+) {
 
     event.preventDefault();
 
 
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
     const title =
-        $("#questionTitle")?.value.trim();
+        $("#questionTitle")
+            ?.value
+            .trim();
 
 
     const subject =
-        $("#questionSubject")?.value.trim();
+        $("#questionSubject")
+            ?.value
+            .trim() ||
+        null;
 
 
     const body =
-        $("#questionBody")?.value.trim();
+        $("#questionBody")
+            ?.value
+            .trim();
 
 
     if (!title || !body) {
 
         showToast(
-            "A cím és a kérdés megadása kötelező.",
+            "A cím és a kérdés szövege kötelező.",
             "error"
         );
 
         return;
-
     }
-
-
-    setLoading(true);
 
 
     try {
 
         const {
             error
-        } = await supabaseClient
+        } =
+            await supabaseClient
+                .from("questions")
+                .insert({
 
-            .from("questions")
+                    author_id:
+                        appState.user.id,
 
-            .insert({
+                    title,
 
-                author_id:
-                    appState.currentUser.id,
+                    body,
 
-                title,
+                    subject
 
-                body,
-
-                subject:
-                    subject || null
-
-            });
+                });
 
 
         if (error) {
-
-            console.error(error);
-
-            showToast(
-                "Nem sikerült létrehozni a kérdést.",
-                "error"
-            );
-
-            return;
-
+            throw error;
         }
 
 
         closeModal();
 
         showToast(
-            "A kérdés közzétéve."
+            "Kérdés közzétéve.",
+            "success"
         );
 
-        await renderCurrentView();
+
+        await renderQuestions();
 
     } catch (error) {
 
         console.error(error);
 
         showToast(
-            "Hiba történt.",
+            getErrorMessage(error),
             "error"
         );
-
-    } finally {
-
-        setLoading(false);
-
     }
-
 }
 
 
 /* =========================================================
-   ÜZENETEK
+   QUESTION DETAILS
 ========================================================= */
 
-async function renderMessages(page) {
+async function openQuestion(
+    questionId
+) {
 
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Üzenetek",
-            "Privát és csoportos beszélgetések.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-new-message
-                >
-                    ＋ Új beszélgetés
-                </button>
-            `
-        )}
+    const question =
+        appState.questions.find(
+            item =>
+                item.id === questionId
+        );
 
 
-        <div class="card chat-layout">
-
-
-            <div
-                class="chat-list"
-                id="chatList"
-            >
-
-                <div class="empty">
-                    Nincsenek beszélgetések.
-                </div>
-
-            </div>
-
-
-            <div class="chat-window">
-
-                <div
-                    id="chatWindow"
-                >
-
-                    <div class="empty">
-
-                        Válassz egy beszélgetést.
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
+    if (!question) {
         return;
     }
 
 
-    /*
-     * A beszélgetések tényleges lekérése
-     * a conversations és conversation_members
-     * táblákból történik majd.
-     */
-
-}
-
-
-/* =========================================================
-   CSOPORTOK
-========================================================= */
-
-async function renderGroups(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Csoportok",
-            "Osztályok, szakmai és tanulócsoportok.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-create-group
-                >
-                    ＋ Csoport
-                </button>
-            `
-        )}
-
-
-        <div
-            id="groupsList"
-            class="grid"
-        >
-
-            <div class="card empty">
-
-                Még nincsenek csoportok.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("groups")
-
-            .select("*")
-
+    const {
+        data: answers,
+        error
+    } =
+        await supabaseClient
+            .from("answers")
+            .select(`
+                *,
+                profiles (
+                    id,
+                    name,
+                    class_name,
+                    role,
+                    avatar_url
+                )
+            `)
+            .eq(
+                "question_id",
+                questionId
+            )
             .order(
                 "created_at",
-                {
-                    ascending: false
-                }
-            );
-
-
-        if (error) {
-
-            console.error(error);
-
-            return;
-
-        }
-
-
-        const container =
-            $("#groupsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    group => `
-
-                        <article class="card">
-
-                            <div class="cover">
-                                👥
-                            </div>
-
-                            <h2>
-                                ${escapeHTML(
-                                    group.name
-                                )}
-                            </h2>
-
-                            <p class="muted">
-
-                                ${escapeHTML(
-                                    group.description ||
-                                    ""
-                                )}
-
-                            </p>
-
-                            <button
-                                type="button"
-                                class="btn secondary"
-                                data-group-id="${escapeHTML(group.id)}"
-                            >
-                                Megnyitás
-                            </button>
-
-                        </article>
-
-                    `
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   TANTÁRGYAK
-========================================================= */
-
-async function renderSubjects(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Tantárgyak",
-            "Tanulási területek és szakmai témák."
-        )}
-
-
-        <div
-            id="subjectsList"
-            class="grid"
-        >
-
-            <div class="card empty">
-
-                Még nincsenek tantárgyak.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("subjects")
-
-            .select("*")
-
-            .order(
-                "name",
                 {
                     ascending: true
                 }
             );
 
 
-        if (error) {
+    if (error) {
 
-            console.error(error);
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
 
-            return;
-
-        }
-
-
-        const container =
-            $("#subjectsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    subject => `
-
-                        <article class="card">
-
-                            <div class="cover">
-                                📚
-                            </div>
-
-                            <h2>
-                                ${escapeHTML(
-                                    subject.name
-                                )}
-                            </h2>
-
-                            <p class="muted">
-
-                                ${escapeHTML(
-                                    subject.description ||
-                                    ""
-                                )}
-
-                            </p>
-
-                            <button
-                                type="button"
-                                class="btn secondary"
-                                data-subject-id="${escapeHTML(subject.id)}"
-                            >
-                                Megnyitás
-                            </button>
-
-                        </article>
-
-                    `
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   TANANYAGOK
-========================================================= */
-
-async function renderMaterials(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Tananyagok",
-            "Jegyzetek, dokumentumok és segédanyagok.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-add-material
-                >
-                    ＋ Tananyag
-                </button>
-            `
-        )}
-
-
-        <div
-            id="materialsList"
-            class="list"
-        >
-
-            <div class="card empty">
-
-                Még nincsenek feltöltött tananyagok.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("study_materials")
-
-            .select(`
-                *,
-                subjects (
-                    id,
-                    name
-                )
-            `)
-
-            .order(
-                "created_at",
-                {
-                    ascending: false
-                }
-            );
-
-
-        if (error) {
-
-            console.error(error);
-
-            return;
-
-        }
-
-
-        const container =
-            $("#materialsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    material => `
-
-                        <div class="list-item">
-
-                            <div>
-                                📖
-                            </div>
-
-                            <div>
-
-                                <b>
-                                    ${escapeHTML(
-                                        material.title
-                                    )}
-                                </b>
-
-                                <div class="muted">
-
-                                    ${escapeHTML(
-                                        material.subjects?.name ||
-                                        "Általános"
-                                    )}
-
-                                </div>
-
-                                <p>
-
-                                    ${escapeHTML(
-                                        material.description ||
-                                        ""
-                                    )}
-
-                                </p>
-
-                            </div>
-
-                            ${
-                                material.file_url
-
-                                    ? `
-                                        <a
-                                            class="btn secondary small"
-                                            href="${escapeHTML(material.file_url)}"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            Megnyitás
-                                        </a>
-                                    `
-
-                                    : ""
-                            }
-
-                        </div>
-
-                    `
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   ISKOLAI HÍREK
-========================================================= */
-
-async function renderAnnouncements(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Iskolai hírek",
-            "Fontos információk és közlemények."
-        )}
-
-
-        <div
-            id="announcementsList"
-        >
-
-            <div class="card empty">
-
-                Még nincsenek közzétett hírek.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("announcements")
-
-            .select("*")
-
-            .order(
-                "created_at",
-                {
-                    ascending: false
-                }
-            );
-
-
-        if (error) {
-
-            console.error(error);
-
-            return;
-
-        }
-
-
-        const container =
-            $("#announcementsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    announcement => `
-
-                        <article class="card announcement">
-
-                            <span class="tag">
-                                📢 Iskolai hír
-                            </span>
-
-                            <h2>
-                                ${escapeHTML(
-                                    announcement.title
-                                )}
-                            </h2>
-
-                            <p>
-
-                                ${escapeHTML(
-                                    announcement.body
-                                )}
-
-                            </p>
-
-                            <small class="muted">
-
-                                ${escapeHTML(
-                                    formatDate(
-                                        announcement.created_at
-                                    )
-                                )}
-
-                            </small>
-
-                        </article>
-
-                    `
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   MENTÉSEK
-========================================================= */
-
-async function renderSaved(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Mentések",
-            "Az általad elmentett tartalmak."
-        )}
-
-
-        <div
-            class="card empty"
-        >
-
-            Még nincs mentett tartalmad.
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-}
-
-
-/* =========================================================
-   PROFIL
-========================================================= */
-
-async function renderProfile(page) {
-
-    const user =
-        appState.currentUser;
-
-
-    if (!user) {
-
-        page.innerHTML = `
-
-            <div class="card empty">
-
-                A profil megtekintéséhez
-                be kell jelentkezned.
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Profil",
-            "A saját profilod.",
-            `
-                <button
-                    type="button"
-                    class="btn"
-                    data-edit-profile
-                >
-                    Profil szerkesztése
-                </button>
-            `
-        )}
-
-
-        <div class="card profile-hero">
-
-
-            <div
-                id="profileAvatar"
-                class="avatar profile-big"
-            >
-
-                ${
-                    user.avatar_url
-
-                        ? `
-                            <img
-                                src="${escapeHTML(user.avatar_url)}"
-                                alt="Profilkép"
-                            >
-                        `
-
-                        : escapeHTML(
-                            getInitials(
-                                user.name
-                            )
-                        )
-                }
-
-            </div>
-
-
-            <div>
-
-                <h1>
-                    ${escapeHTML(
-                        user.name ||
-                        "Felhasználó"
-                    )}
-                </h1>
-
-
-                <div class="muted">
-
-                    ${escapeHTML(
-                        user.class_name ||
-                        ""
-                    )}
-
-                    ${
-                        user.class_name
-                            ? " · "
-                            : ""
-                    }
-
-                    ${escapeHTML(
-                        translateRole(
-                            user.role
-                        )
-                    )}
-
-                </div>
-
-
-                ${
-                    user.bio
-
-                        ? `
-                            <p>
-                                ${escapeHTML(
-                                    user.bio
-                                )}
-                            </p>
-                        `
-
-                        : ""
-                }
-
-            </div>
-
-        </div>
-
-
-        <div class="stat-grid">
-
-
-            <div class="stat">
-
-                <strong>
-                    0
-                </strong>
-
-                Bejegyzés
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    0
-                </strong>
-
-                Csoport
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    0
-                </strong>
-
-                Kérdés
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    0
-                </strong>
-
-                Mentés
-
-            </div>
-
-
-        </div>
-
-
-        <div class="card">
-
-            <h2>
-                Fiók
-            </h2>
-
-            <p class="muted">
-
-                ${escapeHTML(
-                    user.email ||
-                    ""
-                )}
-
-            </p>
-
-            <br>
-
-            <button
-                type="button"
-                class="btn danger"
-                data-logout
-            >
-                Kijelentkezés
-            </button>
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   SZEREPKÖR FORDÍTÁSA
-========================================================= */
-
-function translateRole(role) {
-
-    switch (role) {
-
-        case "teacher":
-            return "Tanár";
-
-        case "admin":
-            return "Adminisztrátor";
-
-        case "student":
-        default:
-            return "Diák";
-
-    }
-
-}
-
-
-/* =========================================================
-   PROFIL SZERKESZTÉSE
-========================================================= */
-
-function openEditProfile() {
-
-    const user =
-        appState.currentUser;
-
-
-    if (!user) {
         return;
     }
 
 
     openModal(`
 
-        <h2>
-            Profil szerkesztése
-        </h2>
+        <div class="modal-header">
+
+            <span class="subject-badge">
+                ${
+                    question.subject
+                    ?
+                    escapeHTML(
+                        question.subject
+                    )
+                    :
+                    "Kérdés"
+                }
+            </span>
+
+            <h2>
+                ${escapeHTML(
+                    question.title
+                )}
+            </h2>
+
+            <p>
+                ${escapeHTML(
+                    question.body
+                )}
+            </p>
+
+        </div>
+
+
+        <div class="answers-list">
+
+            <h3>
+                Válaszok
+            </h3>
+
+
+            ${
+                answers?.length
+                ?
+                answers.map(answer => `
+
+                    <div
+                        class="answer-card ${
+                            answer.is_best
+                            ? "best-answer"
+                            : ""
+                        }"
+                    >
+
+                        <div class="answer-header">
+
+                            ${avatarHTML(
+                                answer.profiles,
+                                "tiny"
+                            )}
+
+                            <div>
+
+                                <strong>
+                                    ${escapeHTML(
+                                        answer.profiles?.name ||
+                                        "Felhasználó"
+                                    )}
+                                </strong>
+
+                                <small>
+                                    ${timeAgo(
+                                        answer.created_at
+                                    )}
+                                </small>
+
+                            </div>
+
+                        </div>
+
+
+                        <p>
+                            ${escapeHTML(
+                                answer.body
+                            )}
+                        </p>
+
+
+                        ${
+                            answer.is_best
+                            ?
+                            `
+                                <span class="status-badge success">
+                                    ✓ Elfogadott válasz
+                                </span>
+                            `
+                            :
+                            ""
+                        }
+
+                    </div>
+
+                `).join("")
+                :
+                `
+                    <div class="empty-inline">
+                        Még nincs válasz.
+                    </div>
+                `
+            }
+
+        </div>
 
 
         <form
-            id="editProfileForm"
+            id="answerQuestionForm"
+            data-question-id="${questionId}"
         >
 
-
             <div class="form-group">
 
-                <label for="profileName">
-                    Név
-                </label>
-
-                <input
-                    id="profileName"
-                    value="${escapeHTML(user.name || "")}"
-                    required
-                >
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label for="profileClass">
-                    Osztály
-                </label>
-
-                <input
-                    id="profileClass"
-                    value="${escapeHTML(user.class_name || "")}"
-                >
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label for="profileBio">
-                    Bemutatkozás
-                </label>
-
-                <textarea
-                    id="profileBio"
-                    placeholder="Írj néhány sort magadról…"
-                >${escapeHTML(user.bio || "")}</textarea>
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label for="profileAvatarUrl">
-                    Profilkép URL
-                </label>
-
-                <input
-                    type="url"
-                    id="profileAvatarUrl"
-                    value="${escapeHTML(user.avatar_url || "")}"
-                    placeholder="https://..."
-                >
-
-            </div>
-
-
-            <button
-                type="submit"
-                class="btn full-width"
-            >
-                Mentés
-            </button>
-
-
-        </form>
-
-    `);
-
-
-    $("#editProfileForm")
-        ?.addEventListener(
-            "submit",
-            handleEditProfile
-        );
-
-}
-
-
-/* =========================================================
-   PROFIL MENTÉSE
-========================================================= */
-
-async function handleEditProfile(event) {
-
-    event.preventDefault();
-
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    const name =
-        $("#profileName")?.value.trim();
-
-
-    const className =
-        $("#profileClass")?.value.trim();
-
-
-    const bio =
-        $("#profileBio")?.value.trim();
-
-
-    const avatarUrl =
-        $("#profileAvatarUrl")?.value.trim();
-
-
-    if (!name) {
-
-        showToast(
-            "A név nem lehet üres.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    setLoading(true);
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("profiles")
-
-            .update({
-
-                name,
-
-                class_name:
-                    className || null,
-
-                bio:
-                    bio || null,
-
-                avatar_url:
-                    avatarUrl || null
-
-            })
-
-            .eq(
-                "id",
-                appState.currentUser.id
-            )
-
-            .select()
-
-            .single();
-
-
-        if (error) {
-
-            console.error(error);
-
-            showToast(
-                "Nem sikerült menteni a profilt.",
-                "error"
-            );
-
-            return;
-
-        }
-
-
-        appState.currentUser =
-            data;
-
-
-        updateUserInterface();
-
-        closeModal();
-
-        showToast(
-            "Profil frissítve."
-        );
-
-        await renderCurrentView();
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Hiba történt a profil mentésekor.",
-            "error"
-        );
-
-    } finally {
-
-        setLoading(false);
-
-    }
-
-}
-
-
-/* =========================================================
-   ÉRTESÍTÉSEK
-========================================================= */
-
-async function renderNotifications(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Értesítések",
-            "Legutóbbi aktivitásaid."
-        )}
-
-
-        <div
-            id="notificationsList"
-            class="list"
-        >
-
-            <div class="card empty">
-
-                Nincsenek értesítések.
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-
-            .from("notifications")
-
-            .select("*")
-
-            .eq(
-                "user_id",
-                appState.currentUser.id
-            )
-
-            .order(
-                "created_at",
-                {
-                    ascending: false
-                }
-            );
-
-
-        if (error) {
-
-            console.error(error);
-
-            return;
-
-        }
-
-
-        const container =
-            $("#notificationsList");
-
-
-        if (
-            !container ||
-            !data ||
-            !data.length
-        ) {
-
-            return;
-
-        }
-
-
-        container.innerHTML =
-            data
-                .map(
-                    notification => `
-
-                        <div class="list-item">
-
-                            <div>
-                                🔔
-                            </div>
-
-                            <div>
-
-                                <b>
-                                    ${notification.read ? "" : "Új · "}
-                                </b>
-
-                                ${escapeHTML(
-                                    notification.text
-                                )}
-
-                                <div class="muted">
-
-                                    ${escapeHTML(
-                                        formatDate(
-                                            notification.created_at
-                                        )
-                                    )}
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    `
-                )
-                .join("");
-
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   BEÁLLÍTÁSOK
-========================================================= */
-
-async function renderSettings(page) {
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Beállítások",
-            "A SZESZI személyes beállításai."
-        )}
-
-
-        <div class="card">
-
-            <h2>
-                Megjelenés
-            </h2>
-
-            <br>
-
-            <label>
-
-                <input
-                    type="checkbox"
-                    id="darkMode"
-                >
-
-                Sötét mód
-
-            </label>
-
-        </div>
-
-
-        <div class="card">
-
-            <h2>
-                Fiók
-            </h2>
-
-            <br>
-
-            <button
-                type="button"
-                class="btn danger"
-                data-logout
-            >
-                Kijelentkezés
-            </button>
-
-        </div>
-
-    `;
-
-
-    const darkMode =
-        $("#darkMode");
-
-
-    if (darkMode) {
-
-        darkMode.checked =
-            localStorage.getItem(
-                "szeszi_dark_mode"
-            ) === "true";
-
-    }
-
-}
-
-
-/* =========================================================
-   ADMIN
-========================================================= */
-
-async function renderAdmin(page) {
-
-    if (
-        appState.currentUser?.role !==
-        "admin"
-    ) {
-
-        page.innerHTML = `
-
-            <div class="card empty">
-
-                Nincs jogosultságod az adminisztrációhoz.
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Adminisztráció",
-            "Az iskolai közösségi rendszer kezelése."
-        )}
-
-
-        <div class="stat-grid">
-
-            <div class="stat">
-
-                <strong>
-                    —
-                </strong>
-
-                Felhasználók
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    —
-                </strong>
-
-                Bejegyzések
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    —
-                </strong>
-
-                Kérdések
-
-            </div>
-
-
-            <div class="stat">
-
-                <strong>
-                    —
-                </strong>
-
-                Jelentések
-
-            </div>
-
-        </div>
-
-
-        <div class="card">
-
-            <h2>
-                Adminisztráció
-            </h2>
-
-            <p class="muted">
-
-                A felhasználók, bejegyzések,
-                kérdések, csoportok és iskolai
-                közlemények kezelése itt lesz elérhető.
-
-            </p>
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   KERESÉS
-========================================================= */
-
-async function performSearch(term) {
-
-    const query =
-        term.trim();
-
-
-    if (!query) {
-        return;
-    }
-
-
-    appState.searchTerm =
-        query;
-
-
-    appState.currentView =
-        "search";
-
-
-    await renderCurrentView();
-
-}
-
-
-/* =========================================================
-   KERESÉS OLDAL
-========================================================= */
-
-async function renderSearch(page) {
-
-    const term =
-        appState.searchTerm;
-
-
-    page.innerHTML = `
-
-        ${pageHeader(
-            "Keresés",
-            `Találatok erre: „${term}”`
-        )}
-
-
-        <div
-            id="searchResults"
-        >
-
-            <div class="card empty">
-
-                Keresés folyamatban…
-
-            </div>
-
-        </div>
-
-    `;
-
-
-    if (!supabaseClient) {
-
-        $("#searchResults").innerHTML = `
-
-            <div class="card empty">
-
-                A kereséshez először be kell állítani a Supabase adatbázist.
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-
-    try {
-
-        const search =
-            `%${term}%`;
-
-
-        const [
-            profilesResult,
-            postsResult,
-            questionsResult
-        ] = await Promise.all([
-
-            supabaseClient
-
-                .from("profiles")
-
-                .select(
-                    "id,name,class_name,avatar_url"
-                )
-
-                .ilike(
-                    "name",
-                    search
-                )
-
-                .limit(20),
-
-
-            supabaseClient
-
-                .from("posts")
-
-                .select(
-                    "id,body,created_at"
-                )
-
-                .ilike(
-                    "body",
-                    search
-                )
-
-                .limit(20),
-
-
-            supabaseClient
-
-                .from("questions")
-
-                .select(
-                    "id,title,body,subject"
-                )
-
-                .or(
-                    `title.ilike.${search},body.ilike.${search}`
-                )
-
-                .limit(20)
-
-        ]);
-
-
-        const results =
-            $("#searchResults");
-
-
-        if (!results) {
-            return;
-        }
-
-
-        const profiles =
-            profilesResult.data || [];
-
-
-        const posts =
-            postsResult.data || [];
-
-
-        const questions =
-            questionsResult.data || [];
-
-
-        if (
-            !profiles.length &&
-            !posts.length &&
-            !questions.length
-        ) {
-
-            results.innerHTML = `
-
-                <div class="card empty">
-
-                    Nincs találat.
-
-                </div>
-
-            `;
-
-            return;
-
-        }
-
-
-        results.innerHTML = `
-
-            ${
-                profiles.length
-
-                    ? `
-
-                        <div class="card">
-
-                            <h2>
-                                Felhasználók
-                            </h2>
-
-                            ${profiles.map(
-                                user => `
-
-                                    <div class="search-result">
-
-                                        <b>
-                                            👤
-                                            ${escapeHTML(
-                                                user.name
-                                            )}
-                                        </b>
-
-                                        <div>
-                                            ${escapeHTML(
-                                                user.class_name ||
-                                                ""
-                                            )}
-                                        </div>
-
-                                    </div>
-
-                                `
-                            ).join("")}
-
-                        </div>
-
-                    `
-
-                    : ""
-            }
-
-
-            ${
-                posts.length
-
-                    ? `
-
-                        <div class="card">
-
-                            <h2>
-                                Bejegyzések
-                            </h2>
-
-                            ${posts.map(
-                                post => `
-
-                                    <div class="search-result">
-
-                                        <b>
-                                            📝 Bejegyzés
-                                        </b>
-
-                                        <div>
-                                            ${escapeHTML(
-                                                post.body
-                                            )}
-                                        </div>
-
-                                    </div>
-
-                                `
-                            ).join("")}
-
-                        </div>
-
-                    `
-
-                    : ""
-            }
-
-
-            ${
-                questions.length
-
-                    ? `
-
-                        <div class="card">
-
-                            <h2>
-                                Kérdések
-                            </h2>
-
-                            ${questions.map(
-                                question => `
-
-                                    <div class="search-result">
-
-                                        <b>
-                                            ❓
-                                            ${escapeHTML(
-                                                question.title
-                                            )}
-                                        </b>
-
-                                        <div>
-                                            ${escapeHTML(
-                                                question.body
-                                            )}
-                                        </div>
-
-                                    </div>
-
-                                `
-                            ).join("")}
-
-                        </div>
-
-                    `
-
-                    : ""
-            }
-
-        `;
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        $("#searchResults").innerHTML = `
-
-            <div class="card empty">
-
-                A keresés során hiba történt.
-
-            </div>
-
-        `;
-
-    }
-
-}
-
-
-/* =========================================================
-   DARK MODE
-========================================================= */
-
-function initializeTheme() {
-
-    const saved =
-        localStorage.getItem(
-            "szeszi_dark_mode"
-        );
-
-
-    document.body.classList.toggle(
-        "dark",
-        saved === "true"
-    );
-
-}
-
-
-function toggleDarkMode(enabled) {
-
-    document.body.classList.toggle(
-        "dark",
-        enabled
-    );
-
-
-    localStorage.setItem(
-        "szeszi_dark_mode",
-        enabled
-            ? "true"
-            : "false"
-    );
-
-}
-
-
-/* =========================================================
-   ESEMÉNYKEZELŐK
-========================================================= */
-
-function setupEventListeners() {
-
-
-    /* -----------------------------------------
-       AUTH VÁLTÁS
-    ----------------------------------------- */
-
-    $("#showRegister")
-        ?.addEventListener(
-            "click",
-            showRegister
-        );
-
-
-    $("#showLogin")
-        ?.addEventListener(
-            "click",
-            showLogin
-        );
-
-
-    $("#loginForm")
-        ?.addEventListener(
-            "submit",
-            handleLogin
-        );
-
-
-    $("#registerForm")
-        ?.addEventListener(
-            "submit",
-            handleRegister
-        );
-
-
-    /* -----------------------------------------
-       MENÜ
-    ----------------------------------------- */
-
-    $("#menuBtn")
-        ?.addEventListener(
-            "click",
-            toggleSidebar
-        );
-
-
-    /* -----------------------------------------
-       KERESÉS
-    ----------------------------------------- */
-
-    $("#globalSearch")
-        ?.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key === "Enter"
-                ) {
-
-                    performSearch(
-                        event.target.value
-                    );
-
-                }
-
-            }
-        );
-
-
-    /* -----------------------------------------
-       KATTINTÁSOK
-    ----------------------------------------- */
-
-    document.addEventListener(
-        "click",
-        handleDocumentClick
-    );
-
-
-    /* -----------------------------------------
-       MODAL BEZÁRÁS
-    ----------------------------------------- */
-
-    document.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target.closest(
-                    "[data-close-modal]"
-                )
-            ) {
-
-                closeModal();
-
-            }
-
-        }
-    );
-
-
-    /* -----------------------------------------
-       DARK MODE
-    ----------------------------------------- */
-
-    document.addEventListener(
-        "change",
-        event => {
-
-            if (
-                event.target.id ===
-                "darkMode"
-            ) {
-
-                toggleDarkMode(
-                    event.target.checked
-                );
-
-            }
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   DOKUMENTUM KATTINTÁS
-========================================================= */
-
-function handleDocumentClick(event) {
-
-    const viewButton =
-        event.target.closest(
-            "[data-view]"
-        );
-
-
-    if (viewButton) {
-
-        navigate(
-            viewButton.dataset.view
-        );
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-create-post]"
-        )
-    ) {
-
-        openCreatePost();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-create-question]"
-        )
-    ) {
-
-        openCreateQuestion();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-new-message]"
-        )
-    ) {
-
-        showToast(
-            "Az új beszélgetés funkció a Supabase üzenetrendszer bekötése után lesz aktív."
-        );
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-create-group]"
-        )
-    ) {
-
-        openCreateGroup();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-add-material]"
-        )
-    ) {
-
-        openAddMaterial();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-edit-profile]"
-        )
-    ) {
-
-        openEditProfile();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-logout]"
-        )
-    ) {
-
-        logout();
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-like-post]"
-        )
-    ) {
-
-        handleLikePost(
-            event.target.closest(
-                "[data-like-post]"
-            ).dataset.likePost
-        );
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-comment-post]"
-        )
-    ) {
-
-        const id =
-            event.target.closest(
-                "[data-comment-post]"
-            ).dataset.commentPost;
-
-        openCommentModal(id);
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-share-post]"
-        )
-    ) {
-
-        sharePost(
-            event.target.closest(
-                "[data-share-post]"
-            ).dataset.sharePost
-        );
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-save-post]"
-        )
-    ) {
-
-        savePost(
-            event.target.closest(
-                "[data-save-post]"
-            ).dataset.savePost
-        );
-
-        return;
-
-    }
-
-
-    if (
-        event.target.closest(
-            "[data-answer-question]"
-        )
-    ) {
-
-        const id =
-            event.target.closest(
-                "[data-answer-question]"
-            ).dataset.answerQuestion;
-
-        openAnswerModal(id);
-
-        return;
-
-    }
-
-}
-
-
-/* =========================================================
-   LIKE
-========================================================= */
-
-async function handleLikePost(postId) {
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (!appState.currentUser) {
-        return;
-    }
-
-
-    try {
-
-        const {
-            data: existing,
-            error: selectError
-        } = await supabaseClient
-
-            .from("post_reactions")
-
-            .select("*")
-
-            .eq(
-                "post_id",
-                postId
-            )
-
-            .eq(
-                "user_id",
-                appState.currentUser.id
-            )
-
-            .maybeSingle();
-
-
-        if (selectError) {
-            throw selectError;
-        }
-
-
-        if (existing) {
-
-            const {
-                error
-            } = await supabaseClient
-
-                .from("post_reactions")
-
-                .delete()
-
-                .eq(
-                    "post_id",
-                    postId
-                )
-
-                .eq(
-                    "user_id",
-                    appState.currentUser.id
-                );
-
-
-            if (error) {
-                throw error;
-            }
-
-
-        } else {
-
-            const {
-                error
-            } = await supabaseClient
-
-                .from("post_reactions")
-
-                .insert({
-
-                    post_id: postId,
-
-                    user_id:
-                        appState.currentUser.id,
-
-                    reaction: "like"
-
-                });
-
-
-            if (error) {
-                throw error;
-            }
-
-        }
-
-
-        await renderCurrentView();
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Nem sikerült módosítani a reakciót.",
-            "error"
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   HOZZÁSZÓLÁS
-========================================================= */
-
-function openCommentModal(postId) {
-
-    openModal(`
-
-        <h2>
-            Hozzászólás
-        </h2>
-
-
-        <form id="commentForm">
-
-
-            <div class="form-group">
-
-                <label for="commentText">
-                    Hozzászólás
-                </label>
-
-                <textarea
-                    id="commentText"
-                    required
-                    placeholder="Írd le a hozzászólásodat…"
-                ></textarea>
-
-            </div>
-
-
-            <button
-                type="submit"
-                class="btn full-width"
-            >
-                Küldés
-            </button>
-
-
-        </form>
-
-    `);
-
-
-    $("#commentForm")
-        ?.addEventListener(
-            "submit",
-            async event => {
-
-                event.preventDefault();
-
-
-                const text =
-                    $("#commentText")
-                        ?.value.trim();
-
-
-                if (!text) {
-                    return;
-                }
-
-
-                if (!supabaseClient) {
-
-                    showToast(
-                        "A Supabase még nincs beállítva.",
-                        "error"
-                    );
-
-                    return;
-
-                }
-
-
-                try {
-
-                    const {
-                        error
-                    } = await supabaseClient
-
-                        .from("comments")
-
-                        .insert({
-
-                            post_id:
-                                postId,
-
-                            author_id:
-                                appState.currentUser.id,
-
-                            body:
-                                text
-
-                        });
-
-
-                    if (error) {
-                        throw error;
-                    }
-
-
-                    closeModal();
-
-                    showToast(
-                        "Hozzászólás elküldve."
-                    );
-
-
-                    await renderCurrentView();
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showToast(
-                        "Nem sikerült elküldeni a hozzászólást.",
-                        "error"
-                    );
-
-                }
-
-            }
-        );
-
-}
-
-
-/* =========================================================
-   MEGOSZTÁS
-========================================================= */
-
-async function sharePost(postId) {
-
-    const url =
-        `${window.location.origin}${window.location.pathname}?post=${encodeURIComponent(postId)}`;
-
-
-    try {
-
-        if (
-            navigator.share
-        ) {
-
-            await navigator.share({
-
-                title: "SZESZI",
-
-                text:
-                    "Egy bejegyzés a SZESZI-ben.",
-
-                url
-
-            });
-
-            return;
-
-        }
-
-
-        await navigator.clipboard.writeText(
-            url
-        );
-
-
-        showToast(
-            "A bejegyzés linkje a vágólapra került."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-/* =========================================================
-   MENTÉS
-========================================================= */
-
-async function savePost(postId) {
-
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    try {
-
-        const {
-            data: existing,
-            error: selectError
-        } = await supabaseClient
-
-            .from("saved_posts")
-
-            .select("*")
-
-            .eq(
-                "user_id",
-                appState.currentUser.id
-            )
-
-            .eq(
-                "post_id",
-                postId
-            )
-
-            .maybeSingle();
-
-
-        if (selectError) {
-            throw selectError;
-        }
-
-
-        if (existing) {
-
-            const {
-                error
-            } = await supabaseClient
-
-                .from("saved_posts")
-
-                .delete()
-
-                .eq(
-                    "user_id",
-                    appState.currentUser.id
-                )
-
-                .eq(
-                    "post_id",
-                    postId
-                );
-
-
-            if (error) {
-                throw error;
-            }
-
-
-            showToast(
-                "Bejegyzés eltávolítva a mentésekből."
-            );
-
-
-        } else {
-
-            const {
-                error
-            } = await supabaseClient
-
-                .from("saved_posts")
-
-                .insert({
-
-                    user_id:
-                        appState.currentUser.id,
-
-                    post_id:
-                        postId
-
-                });
-
-
-            if (error) {
-                throw error;
-            }
-
-
-            showToast(
-                "Bejegyzés elmentve."
-            );
-
-        }
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Nem sikerült módosítani a mentést.",
-            "error"
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   VÁLASZ
-========================================================= */
-
-function openAnswerModal(questionId) {
-
-    openModal(`
-
-        <h2>
-            Válasz a kérdésre
-        </h2>
-
-
-        <form id="answerForm">
-
-
-            <div class="form-group">
-
-                <label for="answerText">
+                <label for="answerBody">
                     Válasz
                 </label>
 
                 <textarea
-                    id="answerText"
+                    id="answerBody"
+                    rows="5"
+                    maxlength="5000"
+                    placeholder="Segíts a kérdezőnek..."
                     required
-                    placeholder="Írd le a válaszodat…"
                 ></textarea>
 
             </div>
 
 
             <button
+                class="primary-btn full-width"
                 type="submit"
-                class="btn full-width"
             >
                 Válasz elküldése
             </button>
 
-
         </form>
-
     `);
+}
 
 
-    $("#answerForm")
-        ?.addEventListener(
-            "submit",
-            async event => {
+async function createAnswer(
+    event
+) {
 
-                event.preventDefault();
-
-
-                const text =
-                    $("#answerText")
-                        ?.value.trim();
+    event.preventDefault();
 
 
-                if (!text) {
-                    return;
-                }
+    const questionId =
+        event.target.dataset.questionId;
 
 
-                if (!supabaseClient) {
-
-                    showToast(
-                        "A Supabase még nincs beállítva.",
-                        "error"
-                    );
-
-                    return;
-
-                }
+    const body =
+        $("#answerBody")
+            ?.value
+            .trim();
 
 
-                try {
-
-                    const {
-                        error
-                    } = await supabaseClient
-
-                        .from("answers")
-
-                        .insert({
-
-                            question_id:
-                                questionId,
-
-                            author_id:
-                                appState.currentUser.id,
-
-                            body:
-                                text
-
-                        });
+    if (!body) {
+        return;
+    }
 
 
-                    if (error) {
-                        throw error;
-                    }
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("answers")
+                .insert({
+
+                    question_id:
+                        questionId,
+
+                    author_id:
+                        appState.user.id,
+
+                    body
+
+                });
 
 
-                    closeModal();
-
-                    showToast(
-                        "A válasz elküldve."
-                    );
+        if (error) {
+            throw error;
+        }
 
 
-                    await renderCurrentView();
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showToast(
-                        "Nem sikerült elküldeni a választ.",
-                        "error"
-                    );
-
-                }
-
-            }
+        showToast(
+            "Válasz elküldve.",
+            "success"
         );
 
+
+        await openQuestion(
+            questionId
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
 }
 
 
 /* =========================================================
-   CSOPORT LÉTREHOZÁSA
+   MESSAGES
 ========================================================= */
 
-function openCreateGroup() {
+async function loadConversations() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("conversation_members")
+            .select(`
+                conversation_id,
+                conversations (
+                    id,
+                    name,
+                    is_group,
+                    created_at
+                )
+            `)
+            .eq(
+                "user_id",
+                appState.user.id
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.conversations =
+        (data || [])
+            .map(item =>
+                item.conversations
+            )
+            .filter(Boolean);
+}
+
+
+async function renderMessages() {
+
+    await loadConversations();
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Üzenetek</h1>
+
+                <p>
+                    Privát és csoportos beszélgetések.
+                </p>
+
+            </div>
+
+
+            <button
+                class="primary-btn"
+                type="button"
+                data-action="new-message"
+            >
+                ＋ Új üzenet
+            </button>
+
+        </div>
+
+
+        <div class="messages-layout">
+
+            <aside class="conversation-list">
+
+                ${
+                    appState.conversations.length
+                    ?
+                    appState.conversations
+                        .map(renderConversation)
+                        .join("")
+                    :
+                    `
+                        <div class="empty-inline">
+                            Még nincs beszélgetés.
+                        </div>
+                    `
+                }
+
+            </aside>
+
+
+            <section
+                class="chat-panel"
+                id="chatPanel"
+            >
+
+                ${
+                    appState.currentConversation
+                    ?
+                    `
+                        <div class="loading-state">
+                            Beszélgetés betöltése...
+                        </div>
+                    `
+                    :
+                    `
+                        <div class="empty-state compact">
+
+                            <div class="empty-icon">
+                                💬
+                            </div>
+
+                            <h3>
+                                Válassz egy beszélgetést
+                            </h3>
+
+                            <p>
+                                Itt jelennek meg az üzeneteid.
+                            </p>
+
+                        </div>
+                    `
+                }
+
+            </section>
+
+        </div>
+    `;
+
+
+    if (
+        appState.currentConversation
+    ) {
+
+        await openConversation(
+            appState.currentConversation
+        );
+    }
+}
+
+
+function renderConversation(
+    conversation
+) {
+
+    return `
+
+        <button
+            class="conversation-item"
+            type="button"
+            data-action="open-conversation"
+            data-id="${conversation.id}"
+        >
+
+            <div class="avatar small">
+                ${
+                    conversation.is_group
+                    ?
+                    "👥"
+                    :
+                    "💬"
+                }
+            </div>
+
+            <div>
+
+                <strong>
+                    ${
+                        escapeHTML(
+                            conversation.name ||
+                            "Beszélgetés"
+                        )
+                    }
+                </strong>
+
+                <span>
+                    ${
+                        conversation.is_group
+                        ?
+                        "Csoport"
+                        :
+                        "Privát beszélgetés"
+                    }
+                </span>
+
+            </div>
+
+        </button>
+    `;
+}
+
+
+/* =========================================================
+   CONVERSATION
+========================================================= */
+
+async function openConversation(
+    conversationId
+) {
+
+    appState.currentConversation =
+        conversationId;
+
+
+    const panel =
+        $("#chatPanel");
+
+
+    if (!panel) {
+        return;
+    }
+
+
+    panel.innerHTML = `
+        <div class="loading-state">
+            Üzenetek betöltése...
+        </div>
+    `;
+
+
+    const conversation =
+        appState.conversations.find(
+            item =>
+                item.id ===
+                conversationId
+        );
+
+
+    const {
+        data: messages,
+        error
+    } =
+        await supabaseClient
+            .from("messages")
+            .select(`
+                *,
+                profiles (
+                    id,
+                    name,
+                    avatar_url
+                )
+            `)
+            .eq(
+                "conversation_id",
+                conversationId
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    panel.innerHTML = `
+
+        <div class="chat-header">
+
+            <div>
+
+                <strong>
+                    ${
+                        escapeHTML(
+                            conversation?.name ||
+                            "Beszélgetés"
+                        )
+                    }
+                </strong>
+
+                <span>
+                    ${
+                        conversation?.is_group
+                        ?
+                        "Csoport"
+                        :
+                        "Privát beszélgetés"
+                    }
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div
+            class="chat-messages"
+            id="chatMessages"
+        >
+
+            ${
+                messages?.length
+                ?
+                messages
+                    .map(
+                        renderMessage
+                    )
+                    .join("")
+                :
+                `
+                    <div class="empty-state compact">
+                        <div class="empty-icon">
+                            💬
+                        </div>
+                        <p>
+                            Még nincs üzenet.
+                        </p>
+                    </div>
+                `
+            }
+
+        </div>
+
+
+        <form
+            id="messageForm"
+            data-conversation-id="${conversationId}"
+            class="chat-input"
+        >
+
+            <input
+                id="messageInput"
+                type="text"
+                maxlength="5000"
+                placeholder="Írj egy üzenetet..."
+                autocomplete="off"
+                required
+            >
+
+            <button
+                class="primary-btn"
+                type="submit"
+            >
+                Küldés
+            </button>
+
+        </form>
+    `;
+
+
+    scrollChatToBottom();
+
+    subscribeToConversation(
+        conversationId
+    );
+}
+
+
+function renderMessage(
+    message
+) {
+
+    const own =
+        message.sender_id ===
+        appState.user.id;
+
+
+    return `
+
+        <div
+            class="message-row ${
+                own ? "own" : ""
+            }"
+        >
+
+            ${
+                own
+                ?
+                ""
+                :
+                avatarHTML(
+                    message.profiles,
+                    "tiny"
+                )
+            }
+
+
+            <div class="message-bubble">
+
+                <p>
+                    ${escapeHTML(
+                        message.body || ""
+                    )}
+                </p>
+
+                ${
+                    message.file_url
+                    ?
+                    `
+                        <a
+                            href="${escapeHTML(
+                                message.file_url
+                            )}"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            📎 Fájl
+                        </a>
+                    `
+                    :
+                    ""
+                }
+
+                <small>
+                    ${timeAgo(
+                        message.created_at
+                    )}
+                </small>
+
+            </div>
+
+        </div>
+    `;
+}
+
+
+async function sendMessage(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const form =
+        event.target;
+
+
+    const conversationId =
+        form.dataset.conversationId;
+
+
+    const input =
+        $("#messageInput");
+
+
+    const body =
+        input?.value.trim();
+
+
+    if (!body) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("messages")
+                .insert({
+
+                    conversation_id:
+                        conversationId,
+
+                    sender_id:
+                        appState.user.id,
+
+                    body
+
+                });
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        input.value = "";
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   REALTIME CHAT
+========================================================= */
+
+function subscribeToConversation(
+    conversationId
+) {
+
+    if (!supabaseClient) {
+        return;
+    }
+
+
+    if (
+        appState.realtimeChannel
+    ) {
+
+        supabaseClient
+            .removeChannel(
+                appState.realtimeChannel
+            );
+
+        appState.realtimeChannel =
+            null;
+    }
+
+
+    appState.realtimeChannel =
+        supabaseClient
+            .channel(
+                `messages-${conversationId}`
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "messages",
+                    filter:
+                        `conversation_id=eq.${conversationId}`
+                },
+                async payload => {
+
+                    const message =
+                        payload.new;
+
+
+                    const {
+                        data
+                    } =
+                        await supabaseClient
+                            .from("messages")
+                            .select(`
+                                *,
+                                profiles (
+                                    id,
+                                    name,
+                                    avatar_url
+                                )
+                            `)
+                            .eq(
+                                "id",
+                                message.id
+                            )
+                            .single();
+
+
+                    if (!data) {
+                        return;
+                    }
+
+
+                    const container =
+                        $("#chatMessages");
+
+
+                    if (!container) {
+                        return;
+                    }
+
+
+                    /*
+                     * Megakadályozzuk,
+                     * hogy saját üzenetünk
+                     * kétszer jelenjen meg,
+                     * ha a realtime már bekerült.
+                     */
+
+                    if (
+                        container.querySelector(
+                            `[data-message-id="${data.id}"]`
+                        )
+                    ) {
+                        return;
+                    }
+
+
+                    const wrapper =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    wrapper.dataset.messageId =
+                        data.id;
+
+
+                    wrapper.innerHTML =
+                        renderMessage(data);
+
+
+                    container.appendChild(
+                        wrapper
+                    );
+
+
+                    scrollChatToBottom();
+                }
+            )
+            .subscribe();
+}
+
+
+function scrollChatToBottom() {
+
+    const container =
+        $("#chatMessages");
+
+
+    if (!container) {
+        return;
+    }
+
+
+    setTimeout(() => {
+
+        container.scrollTop =
+            container.scrollHeight;
+
+    }, 50);
+}
+
+
+/* =========================================================
+   ÚJ ÜZENET
+========================================================= */
+
+async function openNewMessageModal() {
+
+    /*
+     * A profilokból keresünk felhasználót.
+     * Ez később saját keresőfelületté bővíthető.
+     */
+
+    const {
+        data: users,
+        error
+    } =
+        await supabaseClient
+            .from("profiles")
+            .select(`
+                id,
+                name,
+                class_name,
+                avatar_url
+            `)
+            .neq(
+                "id",
+                appState.user.id
+            )
+            .order(
+                "name"
+            )
+            .limit(100);
+
+
+    if (error) {
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+
+        return;
+    }
+
 
     openModal(`
 
-        <h2>
-            Új csoport
-        </h2>
+        <div class="modal-header">
+
+            <h2>
+                Új beszélgetés
+            </h2>
+
+            <p>
+                Válassz egy felhasználót.
+            </p>
+
+        </div>
+
+
+        <div class="user-picker">
+
+            ${
+                users?.length
+                ?
+                users.map(user => `
+
+                    <button
+                        class="user-picker-item"
+                        type="button"
+                        data-action="start-chat"
+                        data-id="${user.id}"
+                    >
+
+                        ${avatarHTML(
+                            user,
+                            "small"
+                        )}
+
+                        <div>
+
+                            <strong>
+                                ${escapeHTML(
+                                    user.name
+                                )}
+                            </strong>
+
+                            <span>
+                                ${
+                                    user.class_name
+                                    ?
+                                    escapeHTML(
+                                        user.class_name
+                                    )
+                                    :
+                                    ""
+                                }
+                            </span>
+
+                        </div>
+
+                    </button>
+
+                `).join("")
+                :
+                `
+                    <div class="empty-inline">
+                        Nincs választható felhasználó.
+                    </div>
+                `
+            }
+
+        </div>
+    `);
+}
+
+
+async function startPrivateChat(
+    targetUserId
+) {
+
+    try {
+
+        /*
+         * Megnézzük, van-e már olyan
+         * privát beszélgetés,
+         * amelyben mindketten benne vannak.
+         */
+
+        const {
+            data: myMemberships,
+            error
+        } =
+            await supabaseClient
+                .from("conversation_members")
+                .select(
+                    "conversation_id"
+                )
+                .eq(
+                    "user_id",
+                    appState.user.id
+                );
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        const conversationIds =
+            (myMemberships || [])
+                .map(
+                    item =>
+                        item.conversation_id
+                );
+
+
+        let existing = null;
+
+
+        for (
+            const conversationId
+            of conversationIds
+        ) {
+
+            const {
+                data: members,
+                error: memberError
+            } =
+                await supabaseClient
+                    .from(
+                        "conversation_members"
+                    )
+                    .select(
+                        "user_id"
+                    )
+                    .eq(
+                        "conversation_id",
+                        conversationId
+                    );
+
+
+            if (memberError) {
+                continue;
+            }
+
+
+            const ids =
+                (members || [])
+                    .map(
+                        item =>
+                            item.user_id
+                    );
+
+
+            if (
+                ids.length === 2 &&
+                ids.includes(
+                    targetUserId
+                ) &&
+                ids.includes(
+                    appState.user.id
+                )
+            ) {
+
+                const {
+                    data: conversation
+                } =
+                    await supabaseClient
+                        .from(
+                            "conversations"
+                        )
+                        .select("*")
+                        .eq(
+                            "id",
+                            conversationId
+                        )
+                        .eq(
+                            "is_group",
+                            false
+                        )
+                        .maybeSingle();
+
+
+                if (conversation) {
+
+                    existing =
+                        conversation;
+
+                    break;
+                }
+            }
+        }
+
+
+        if (existing) {
+
+            closeModal();
+
+            await renderMessages();
+
+            await openConversation(
+                existing.id
+            );
+
+            return;
+        }
+
+
+        const {
+            data: targetUser
+        } =
+            await supabaseClient
+                .from("profiles")
+                .select("name")
+                .eq(
+                    "id",
+                    targetUserId
+                )
+                .single();
+
+
+        const {
+            data: conversation,
+            error: conversationError
+        } =
+            await supabaseClient
+                .from("conversations")
+                .insert({
+
+                    name:
+                        targetUser?.name ||
+                        "Beszélgetés",
+
+                    is_group:
+                        false
+
+                })
+                .select()
+                .single();
+
+
+        if (conversationError) {
+            throw conversationError;
+        }
+
+
+        const {
+            error: memberError
+        } =
+            await supabaseClient
+                .from(
+                    "conversation_members"
+                )
+                .insert([
+
+                    {
+                        conversation_id:
+                            conversation.id,
+
+                        user_id:
+                            appState.user.id
+                    },
+
+                    {
+                        conversation_id:
+                            conversation.id,
+
+                        user_id:
+                            targetUserId
+                    }
+
+                ]);
+
+
+        if (memberError) {
+            throw memberError;
+        }
+
+
+        closeModal();
+
+        await renderMessages();
+
+        await openConversation(
+            conversation.id
+        );
+
+
+        showToast(
+            "Beszélgetés létrehozva.",
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   GROUPS
+========================================================= */
+
+async function renderGroups() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("groups")
+            .select(`
+                *,
+                profiles:created_by (
+                    name,
+                    avatar_url
+                )
+            `)
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.groups =
+        data || [];
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Csoportok</h1>
+
+                <p>
+                    Osztályok, tanulócsoportok és közösségek.
+                </p>
+
+            </div>
+
+
+            <button
+                class="primary-btn"
+                type="button"
+                data-action="open-group-modal"
+            >
+                ＋ Csoport létrehozása
+            </button>
+
+        </div>
+
+
+        <div class="group-grid">
+
+            ${
+                appState.groups.length
+                ?
+                appState.groups
+                    .map(renderGroup)
+                    .join("")
+                :
+                renderEmptyState(
+                    "👥",
+                    "Még nincs csoport",
+                    "Hozz létre egy tanulócsoportot."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+function renderGroup(group) {
+
+    return `
+
+        <article class="group-card card">
+
+            <div class="group-icon">
+                👥
+            </div>
+
+            <div>
+
+                <h3>
+                    ${escapeHTML(
+                        group.name
+                    )}
+                </h3>
+
+                <p>
+                    ${escapeHTML(
+                        group.description ||
+                        "Nincs leírás."
+                    )}
+                </p>
+
+            </div>
+
+
+            <button
+                class="secondary-btn"
+                type="button"
+                data-action="join-group"
+                data-id="${group.id}"
+            >
+                Csatlakozás
+            </button>
+
+        </article>
+    `;
+}
+
+
+function openGroupModal() {
+
+    openModal(`
+
+        <div class="modal-header">
+
+            <h2>
+                Új csoport
+            </h2>
+
+            <p>
+                Hozz létre egy tanulócsoportot.
+            </p>
+
+        </div>
 
 
         <form id="createGroupForm">
-
 
             <div class="form-group">
 
@@ -5054,8 +3793,9 @@ function openCreateGroup() {
 
                 <input
                     id="groupName"
+                    type="text"
+                    maxlength="150"
                     required
-                    placeholder="Pl. Programozás gyakorló"
                 >
 
             </div>
@@ -5069,7 +3809,8 @@ function openCreateGroup() {
 
                 <textarea
                     id="groupDescription"
-                    placeholder="Miről szól a csoport?"
+                    rows="5"
+                    maxlength="2000"
                 ></textarea>
 
             </div>
@@ -5077,65 +3818,957 @@ function openCreateGroup() {
 
             <button
                 type="submit"
-                class="btn full-width"
+                class="primary-btn full-width"
             >
                 Csoport létrehozása
             </button>
 
-
         </form>
-
     `);
-
-
-    $("#createGroupForm")
-        ?.addEventListener(
-            "submit",
-            handleCreateGroup
-        );
-
 }
 
 
-/* =========================================================
-   CSOPORT MENTÉSE
-========================================================= */
-
-async function handleCreateGroup(event) {
+async function createGroup(
+    event
+) {
 
     event.preventDefault();
 
 
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
     const name =
-        $("#groupName")?.value.trim();
+        $("#groupName")
+            ?.value
+            .trim();
 
 
     const description =
         $("#groupDescription")
-            ?.value.trim();
+            ?.value
+            .trim() ||
+        null;
+
+
+    if (!name) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            data: group,
+            error
+        } =
+            await supabaseClient
+                .from("groups")
+                .insert({
+
+                    name,
+
+                    description,
+
+                    created_by:
+                        appState.user.id
+
+                })
+                .select()
+                .single();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        await supabaseClient
+            .from("group_members")
+            .insert({
+
+                group_id:
+                    group.id,
+
+                user_id:
+                    appState.user.id,
+
+                role:
+                    "owner"
+
+            });
+
+
+        closeModal();
+
+        showToast(
+            "Csoport létrehozva.",
+            "success"
+        );
+
+
+        await renderGroups();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+async function joinGroup(
+    groupId
+) {
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("group_members")
+                .upsert({
+
+                    group_id:
+                        groupId,
+
+                    user_id:
+                        appState.user.id,
+
+                    role:
+                        "member"
+
+                });
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        showToast(
+            "Csatlakoztál a csoporthoz.",
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   SUBJECTS
+========================================================= */
+
+async function renderSubjects() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("subjects")
+            .select("*")
+            .order(
+                "name"
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.subjects =
+        data || [];
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Tantárgyak</h1>
+
+                <p>
+                    Tantárgyak és hozzájuk kapcsolódó tananyagok.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="subject-grid">
+
+            ${
+                appState.subjects.length
+                ?
+                appState.subjects
+                    .map(subject => `
+
+                        <article class="subject-card card">
+
+                            <div class="subject-icon">
+                                📚
+                            </div>
+
+                            <h3>
+                                ${escapeHTML(
+                                    subject.name
+                                )}
+                            </h3>
+
+                            <p>
+                                ${escapeHTML(
+                                    subject.description ||
+                                    "Nincs leírás."
+                                )}
+                            </p>
+
+                        </article>
+
+                    `)
+                    .join("")
+                :
+                renderEmptyState(
+                    "📚",
+                    "Még nincs tantárgy",
+                    "A tantárgyakat később a tanárok és adminok kezelhetik."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   MATERIALS
+========================================================= */
+
+async function renderMaterials() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("study_materials")
+            .select(`
+                *,
+                subjects (
+                    id,
+                    name
+                ),
+                profiles:created_by (
+                    id,
+                    name
+                )
+            `)
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.materials =
+        data || [];
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Tananyagok</h1>
+
+                <p>
+                    Jegyzetek, dokumentumok és tanulási segédanyagok.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="materials-list">
+
+            ${
+                appState.materials.length
+                ?
+                appState.materials
+                    .map(renderMaterial)
+                    .join("")
+                :
+                renderEmptyState(
+                    "📖",
+                    "Még nincs tananyag",
+                    "A tananyagok itt fognak megjelenni."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+function renderMaterial(
+    material
+) {
+
+    return `
+
+        <article class="material-card card">
+
+            <div class="material-icon">
+                📄
+            </div>
+
+
+            <div class="material-content">
+
+                <div>
+
+                    ${
+                        material.subjects
+                        ?
+                        `
+                            <span class="subject-badge">
+                                ${escapeHTML(
+                                    material.subjects.name
+                                )}
+                            </span>
+                        `
+                        :
+                        ""
+                    }
+
+
+                    <h3>
+                        ${escapeHTML(
+                            material.title
+                        )}
+                    </h3>
+
+                    <p>
+                        ${escapeHTML(
+                            material.description ||
+                            "Nincs leírás."
+                        )}
+                    </p>
+
+                </div>
+
+
+                ${
+                    material.file_url
+                    ?
+                    `
+                        <a
+                            class="secondary-btn"
+                            href="${escapeHTML(
+                                material.file_url
+                            )}"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Megnyitás
+                        </a>
+                    `
+                    :
+                    ""
+                }
+
+            </div>
+
+        </article>
+    `;
+}
+
+
+/* =========================================================
+   ANNOUNCEMENTS
+========================================================= */
+
+async function renderAnnouncements() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("announcements")
+            .select(`
+                *,
+                profiles:created_by (
+                    id,
+                    name,
+                    role,
+                    avatar_url
+                )
+            `)
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.announcements =
+        data || [];
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Iskolai hírek</h1>
+
+                <p>
+                    Fontos információk és bejelentések.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="announcements-list">
+
+            ${
+                appState.announcements.length
+                ?
+                appState.announcements
+                    .map(renderAnnouncement)
+                    .join("")
+                :
+                renderEmptyState(
+                    "📢",
+                    "Még nincs iskolai hír",
+                    "Az iskola hivatalos bejelentései itt jelennek meg."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+function renderAnnouncement(
+    announcement
+) {
+
+    return `
+
+        <article class="announcement-card card">
+
+            <div class="announcement-icon">
+                📢
+            </div>
+
+
+            <div>
+
+                <h3>
+                    ${escapeHTML(
+                        announcement.title
+                    )}
+                </h3>
+
+                <p>
+                    ${escapeHTML(
+                        announcement.body
+                    )}
+                </p>
+
+
+                <div class="announcement-meta">
+
+                    ${
+                        announcement.profiles?.name
+                        ?
+                        `
+                            <span>
+                                ${escapeHTML(
+                                    announcement.profiles.name
+                                )}
+                            </span>
+                        `
+                        :
+                        ""
+                    }
+
+                    <span>
+                        ${formatDate(
+                            announcement.created_at
+                        )}
+                    </span>
+
+                </div>
+
+            </div>
+
+        </article>
+    `;
+}
+
+
+/* =========================================================
+   SAVED
+========================================================= */
+
+async function renderSaved() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("saved_posts")
+            .select(`
+                post_id,
+                posts (
+                    *,
+                    profiles (
+                        id,
+                        name,
+                        class_name,
+                        role,
+                        avatar_url
+                    )
+                )
+            `)
+            .eq(
+                "user_id",
+                appState.user.id
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.savedPosts =
+        (data || [])
+            .map(
+                item =>
+                    item.posts
+            )
+            .filter(Boolean);
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Mentések</h1>
+
+                <p>
+                    Az általad elmentett bejegyzések.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        ${
+            appState.savedPosts.length
+            ?
+            appState.savedPosts
+                .map(renderPost)
+                .join("")
+            :
+            renderEmptyState(
+                "🔖",
+                "Nincsenek mentett bejegyzések",
+                "A bejegyzések menüjéből el tudod menteni őket."
+            )
+        }
+    `;
+}
+
+
+/* =========================================================
+   PROFILE
+========================================================= */
+
+async function renderProfile() {
+
+    const page =
+        $("#page");
+
+
+    const profile =
+        appState.profile;
+
+
+    if (!profile) {
+
+        page.innerHTML =
+            renderEmptyState(
+                "👤",
+                "Profil nem található",
+                "Próbáld újra betölteni az oldalt."
+            );
+
+        return;
+    }
+
+
+    const {
+        data: userPosts
+    } =
+        await supabaseClient
+            .from("posts")
+            .select(`
+                *,
+                profiles (
+                    id,
+                    name,
+                    class_name,
+                    role,
+                    avatar_url
+                )
+            `)
+            .eq(
+                "author_id",
+                appState.user.id
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            );
+
+
+    page.innerHTML = `
+
+        <section class="profile-header card">
+
+            <div class="profile-cover"></div>
+
+
+            <div class="profile-main">
+
+                ${avatarHTML(
+                    profile,
+                    "large"
+                )}
+
+
+                <div class="profile-info">
+
+                    <h1>
+                        ${escapeHTML(
+                            profile.name
+                        )}
+                    </h1>
+
+
+                    ${
+                        profile.class_name
+                        ?
+                        `
+                            <span>
+                                ${escapeHTML(
+                                    profile.class_name
+                                )}
+                            </span>
+                        `
+                        :
+                        ""
+                    }
+
+
+                    ${
+                        profile.bio
+                        ?
+                        `
+                            <p>
+                                ${escapeHTML(
+                                    profile.bio
+                                )}
+                            </p>
+                        `
+                        :
+                        `
+                            <p class="muted">
+                                Még nincs bemutatkozás.
+                            </p>
+                        `
+                    }
+
+
+                    <div class="profile-role">
+
+                        ${
+                            profile.role === "admin"
+                            ?
+                            "🛡️ Adminisztrátor"
+                            :
+                            profile.role === "teacher"
+                            ?
+                            "👨‍🏫 Tanár"
+                            :
+                            "🎓 Diák"
+                        }
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    class="secondary-btn"
+                    type="button"
+                    data-action="edit-profile"
+                >
+                    Profil szerkesztése
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <div class="profile-section">
+
+            <div class="section-title">
+
+                <h2>
+                    Bejegyzéseim
+                </h2>
+
+            </div>
+
+
+            ${
+                userPosts?.length
+                ?
+                userPosts
+                    .map(renderPost)
+                    .join("")
+                :
+                renderEmptyState(
+                    "📝",
+                    "Még nincs bejegyzésed",
+                    "Ossz meg valamit a közösséggel."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   PROFILE EDIT
+========================================================= */
+
+function openProfileEditor() {
+
+    const profile =
+        appState.profile;
+
+
+    if (!profile) {
+        return;
+    }
+
+
+    openModal(`
+
+        <div class="modal-header">
+
+            <h2>
+                Profil szerkesztése
+            </h2>
+
+        </div>
+
+
+        <form id="editProfileForm">
+
+            <div class="form-group">
+
+                <label for="editName">
+                    Név
+                </label>
+
+                <input
+                    id="editName"
+                    type="text"
+                    maxlength="100"
+                    value="${escapeHTML(
+                        profile.name || ""
+                    )}"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="editClass">
+                    Osztály
+                </label>
+
+                <input
+                    id="editClass"
+                    type="text"
+                    maxlength="30"
+                    value="${escapeHTML(
+                        profile.class_name || ""
+                    )}"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="editBio">
+                    Bemutatkozás
+                </label>
+
+                <textarea
+                    id="editBio"
+                    rows="5"
+                    maxlength="1000"
+                >${escapeHTML(
+                    profile.bio || ""
+                )}</textarea>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="editAvatar">
+                    Profilkép URL
+                </label>
+
+                <input
+                    id="editAvatar"
+                    type="url"
+                    value="${escapeHTML(
+                        profile.avatar_url || ""
+                    )}"
+                    placeholder="https://..."
+                >
+
+            </div>
+
+
+            <button
+                class="primary-btn full-width"
+                type="submit"
+            >
+                Mentés
+            </button>
+
+        </form>
+    `);
+}
+
+
+async function updateProfile(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const name =
+        $("#editName")
+            ?.value
+            .trim();
+
+
+    const className =
+        $("#editClass")
+            ?.value
+            .trim() ||
+        null;
+
+
+    const bio =
+        $("#editBio")
+            ?.value
+            .trim() ||
+        null;
+
+
+    const avatarUrl =
+        $("#editAvatar")
+            ?.value
+            .trim() ||
+        null;
 
 
     if (!name) {
 
         showToast(
-            "A csoport neve kötelező.",
+            "A név nem lehet üres.",
             "error"
         );
 
         return;
-
     }
 
 
@@ -5144,25 +4777,28 @@ async function handleCreateGroup(event) {
         const {
             data,
             error
-        } = await supabaseClient
+        } =
+            await supabaseClient
+                .from("profiles")
+                .update({
 
-            .from("groups")
+                    name,
 
-            .insert({
+                    class_name:
+                        className,
 
-                name,
+                    bio,
 
-                description:
-                    description || null,
+                    avatar_url:
+                        avatarUrl
 
-                created_by:
-                    appState.currentUser.id
-
-            })
-
-            .select()
-
-            .single();
+                })
+                .eq(
+                    "id",
+                    appState.user.id
+                )
+                .select()
+                .single();
 
 
         if (error) {
@@ -5170,66 +4806,718 @@ async function handleCreateGroup(event) {
         }
 
 
-        if (data) {
+        appState.profile =
+            data;
 
-            await supabaseClient
 
-                .from("group_members")
-
-                .insert({
-
-                    group_id:
-                        data.id,
-
-                    user_id:
-                        appState.currentUser.id,
-
-                    role:
-                        "owner"
-
-                });
-
-        }
-
+        updateProfileUI();
 
         closeModal();
 
         showToast(
-            "Csoport létrehozva."
+            "Profil frissítve.",
+            "success"
         );
 
 
-        await renderCurrentView();
+        await renderProfile();
 
     } catch (error) {
 
         console.error(error);
 
         showToast(
-            "Nem sikerült létrehozni a csoportot.",
+            getErrorMessage(error),
             "error"
         );
-
     }
-
 }
 
 
 /* =========================================================
-   TANANYAG HOZZÁADÁSA
+   NOTIFICATIONS
 ========================================================= */
 
-function openAddMaterial() {
+async function renderNotifications() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("notifications")
+            .select("*")
+            .eq(
+                "user_id",
+                appState.user.id
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            )
+            .limit(100);
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    appState.notifications =
+        data || [];
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Értesítések</h1>
+
+                <p>
+                    Itt láthatod a neked szóló értesítéseket.
+                </p>
+
+            </div>
+
+
+            ${
+                appState.notifications.length
+                ?
+                `
+                    <button
+                        class="secondary-btn"
+                        type="button"
+                        data-action="mark-notifications-read"
+                    >
+                        Összes olvasottnak jelölése
+                    </button>
+                `
+                :
+                ""
+            }
+
+        </div>
+
+
+        <div class="notifications-list">
+
+            ${
+                appState.notifications.length
+                ?
+                appState.notifications
+                    .map(renderNotification)
+                    .join("")
+                :
+                renderEmptyState(
+                    "🔔",
+                    "Nincs értesítés",
+                    "Ha történik valami fontos, itt fog megjelenni."
+                )
+            }
+
+        </div>
+    `;
+}
+
+
+function renderNotification(
+    notification
+) {
+
+    return `
+
+        <article
+            class="notification-item card ${
+                notification.read
+                ? ""
+                : "unread"
+            }"
+        >
+
+            <div class="notification-icon">
+                🔔
+            </div>
+
+
+            <div>
+
+                <p>
+                    ${escapeHTML(
+                        notification.text
+                    )}
+                </p>
+
+                <small>
+                    ${timeAgo(
+                        notification.created_at
+                    )}
+                </small>
+
+            </div>
+
+        </article>
+    `;
+}
+
+
+async function markNotificationsRead() {
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("notifications")
+                .update({
+                    read: true
+                })
+                .eq(
+                    "user_id",
+                    appState.user.id
+                );
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        showToast(
+            "Értesítések olvasottnak jelölve.",
+            "success"
+        );
+
+
+        await renderNotifications();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+async function renderSettings() {
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Beállítások</h1>
+
+                <p>
+                    A SZESZI alkalmazás beállításai.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <section class="settings-card card">
+
+            <div class="settings-row">
+
+                <div>
+
+                    <strong>
+                        Sötét mód
+                    </strong>
+
+                    <span>
+                        Sötétebb megjelenés használata.
+                    </span>
+
+                </div>
+
+
+                <label class="switch">
+
+                    <input
+                        type="checkbox"
+                        id="darkModeToggle"
+                        ${
+                            appState.darkMode
+                            ? "checked"
+                            : ""
+                        }
+                    >
+
+                    <span class="slider"></span>
+
+                </label>
+
+            </div>
+
+
+            <div class="settings-row">
+
+                <div>
+
+                    <strong>
+                        Fiók
+                    </strong>
+
+                    <span>
+                        ${escapeHTML(
+                            appState.user?.email ||
+                            ""
+                        )}
+                    </span>
+
+                </div>
+
+
+                <button
+                    class="danger-btn"
+                    type="button"
+                    data-action="logout"
+                >
+                    Kijelentkezés
+                </button>
+
+            </div>
+
+        </section>
+    `;
+}
+
+
+/* =========================================================
+   ADMIN
+========================================================= */
+
+async function renderAdmin() {
+
+    if (
+        ![
+            "admin",
+            "teacher"
+        ].includes(
+            appState.profile?.role
+        )
+    ) {
+
+        const page =
+            $("#page");
+
+
+        page.innerHTML =
+            renderEmptyState(
+                "🛡️",
+                "Nincs hozzáférés",
+                "Ehhez a felülethez nincs megfelelő jogosultságod."
+            );
+
+        return;
+    }
+
+
+    const page =
+        $("#page");
+
+
+    page.innerHTML = `
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>Adminisztráció</h1>
+
+                <p>
+                    Iskolai tartalmak és közösségi funkciók kezelése.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <section class="admin-grid">
+
+            <article class="admin-card card">
+
+                <div class="admin-icon">
+                    📢
+                </div>
+
+                <h3>
+                    Iskolai hír
+                </h3>
+
+                <p>
+                    Új hivatalos bejelentés közzététele.
+                </p>
+
+                <button
+                    class="primary-btn"
+                    type="button"
+                    data-action="open-announcement-modal"
+                >
+                    Új hír
+                </button>
+
+            </article>
+
+
+            <article class="admin-card card">
+
+                <div class="admin-icon">
+                    📚
+                </div>
+
+                <h3>
+                    Tantárgy
+                </h3>
+
+                <p>
+                    Új tantárgy hozzáadása.
+                </p>
+
+                <button
+                    class="primary-btn"
+                    type="button"
+                    data-action="open-subject-modal"
+                >
+                    Új tantárgy
+                </button>
+
+            </article>
+
+
+            <article class="admin-card card">
+
+                <div class="admin-icon">
+                    📖
+                </div>
+
+                <h3>
+                    Tananyag
+                </h3>
+
+                <p>
+                    Tananyag vagy dokumentum hozzáadása.
+                </p>
+
+                <button
+                    class="primary-btn"
+                    type="button"
+                    data-action="open-material-modal"
+                >
+                    Új tananyag
+                </button>
+
+            </article>
+
+        </section>
+    `;
+}
+
+
+/* =========================================================
+   ADMIN – ANNOUNCEMENT
+========================================================= */
+
+function openAnnouncementModal() {
 
     openModal(`
 
-        <h2>
-            Tananyag hozzáadása
-        </h2>
+        <div class="modal-header">
+
+            <h2>
+                Új iskolai hír
+            </h2>
+
+        </div>
 
 
-        <form id="addMaterialForm">
+        <form id="createAnnouncementForm">
 
+            <div class="form-group">
+
+                <label for="announcementTitle">
+                    Cím
+                </label>
+
+                <input
+                    id="announcementTitle"
+                    type="text"
+                    maxlength="200"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="announcementBody">
+                    Tartalom
+                </label>
+
+                <textarea
+                    id="announcementBody"
+                    rows="8"
+                    maxlength="10000"
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <button
+                class="primary-btn full-width"
+                type="submit"
+            >
+                Hír közzététele
+            </button>
+
+        </form>
+    `);
+}
+
+
+async function createAnnouncement(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const title =
+        $("#announcementTitle")
+            ?.value
+            .trim();
+
+
+    const body =
+        $("#announcementBody")
+            ?.value
+            .trim();
+
+
+    if (!title || !body) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("announcements")
+                .insert({
+
+                    title,
+
+                    body,
+
+                    created_by:
+                        appState.user.id
+
+                });
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        closeModal();
+
+        showToast(
+            "Hír közzétéve.",
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   ADMIN – SUBJECT
+========================================================= */
+
+function openSubjectModal() {
+
+    openModal(`
+
+        <div class="modal-header">
+
+            <h2>
+                Új tantárgy
+            </h2>
+
+        </div>
+
+
+        <form id="createSubjectForm">
+
+            <div class="form-group">
+
+                <label for="subjectName">
+                    Tantárgy neve
+                </label>
+
+                <input
+                    id="subjectName"
+                    type="text"
+                    maxlength="150"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="subjectDescription">
+                    Leírás
+                </label>
+
+                <textarea
+                    id="subjectDescription"
+                    rows="5"
+                    maxlength="2000"
+                ></textarea>
+
+            </div>
+
+
+            <button
+                class="primary-btn full-width"
+                type="submit"
+            >
+                Tantárgy létrehozása
+            </button>
+
+        </form>
+    `);
+}
+
+
+async function createSubject(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const name =
+        $("#subjectName")
+            ?.value
+            .trim();
+
+
+    const description =
+        $("#subjectDescription")
+            ?.value
+            .trim() ||
+        null;
+
+
+    if (!name) {
+        return;
+    }
+
+
+    try {
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("subjects")
+                .insert({
+
+                    name,
+
+                    description
+
+                });
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        closeModal();
+
+        showToast(
+            "Tantárgy létrehozva.",
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   ADMIN – MATERIAL
+========================================================= */
+
+function openMaterialModal() {
+
+    const subjects =
+        appState.subjects || [];
+
+
+    openModal(`
+
+        <div class="modal-header">
+
+            <h2>
+                Új tananyag
+            </h2>
+
+        </div>
+
+
+        <form id="createMaterialForm">
 
             <div class="form-group">
 
@@ -5239,8 +5527,9 @@ function openAddMaterial() {
 
                 <input
                     id="materialTitle"
+                    type="text"
+                    maxlength="200"
                     required
-                    placeholder="Tananyag címe"
                 >
 
             </div>
@@ -5249,13 +5538,30 @@ function openAddMaterial() {
             <div class="form-group">
 
                 <label for="materialSubject">
-                    Tantárgy azonosító
+                    Tantárgy
                 </label>
 
-                <input
+                <select
                     id="materialSubject"
-                    placeholder="Tantárgy"
                 >
+
+                    <option value="">
+                        Nincs megadva
+                    </option>
+
+                    ${
+                        subjects.map(
+                            subject => `
+                                <option value="${subject.id}">
+                                    ${escapeHTML(
+                                        subject.name
+                                    )}
+                                </option>
+                            `
+                        ).join("")
+                    }
+
+                </select>
 
             </div>
 
@@ -5268,7 +5574,8 @@ function openAddMaterial() {
 
                 <textarea
                     id="materialDescription"
-                    placeholder="A tananyag rövid leírása"
+                    rows="5"
+                    maxlength="3000"
                 ></textarea>
 
             </div>
@@ -5276,13 +5583,13 @@ function openAddMaterial() {
 
             <div class="form-group">
 
-                <label for="materialFileUrl">
+                <label for="materialUrl">
                     Fájl URL
                 </label>
 
                 <input
+                    id="materialUrl"
                     type="url"
-                    id="materialFileUrl"
                     placeholder="https://..."
                 >
 
@@ -5290,72 +5597,52 @@ function openAddMaterial() {
 
 
             <button
+                class="primary-btn full-width"
                 type="submit"
-                class="btn full-width"
             >
-                Mentés
+                Tananyag hozzáadása
             </button>
 
-
         </form>
-
     `);
-
-
-    $("#addMaterialForm")
-        ?.addEventListener(
-            "submit",
-            handleAddMaterial
-        );
-
 }
 
 
-/* =========================================================
-   TANANYAG MENTÉSE
-========================================================= */
-
-async function handleAddMaterial(event) {
+async function createMaterial(
+    event
+) {
 
     event.preventDefault();
 
 
-    if (!supabaseClient) {
-
-        showToast(
-            "A Supabase még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
     const title =
         $("#materialTitle")
-            ?.value.trim();
+            ?.value
+            .trim();
+
+
+    const subjectId =
+        $("#materialSubject")
+            ?.value ||
+        null;
 
 
     const description =
         $("#materialDescription")
-            ?.value.trim();
+            ?.value
+            .trim() ||
+        null;
 
 
     const fileUrl =
-        $("#materialFileUrl")
-            ?.value.trim();
+        $("#materialUrl")
+            ?.value
+            .trim() ||
+        null;
 
 
     if (!title) {
-
-        showToast(
-            "A tananyag címe kötelező.",
-            "error"
-        );
-
         return;
-
     }
 
 
@@ -5363,24 +5650,25 @@ async function handleAddMaterial(event) {
 
         const {
             error
-        } = await supabaseClient
+        } =
+            await supabaseClient
+                .from("study_materials")
+                .insert({
 
-            .from("study_materials")
+                    title,
 
-            .insert({
+                    subject_id:
+                        subjectId,
 
-                title,
+                    description,
 
-                description:
-                    description || null,
+                    file_url:
+                        fileUrl,
 
-                file_url:
-                    fileUrl || null,
+                    created_by:
+                        appState.user.id
 
-                created_by:
-                    appState.currentUser.id
-
-            });
+                });
 
 
         if (error) {
@@ -5391,85 +5679,801 @@ async function handleAddMaterial(event) {
         closeModal();
 
         showToast(
-            "Tananyag hozzáadva."
+            "Tananyag hozzáadva.",
+            "success"
         );
-
-
-        await renderCurrentView();
 
     } catch (error) {
 
         console.error(error);
 
         showToast(
-            "Nem sikerült hozzáadni a tananyagot.",
+            getErrorMessage(error),
             "error"
         );
-
     }
-
 }
 
 
 /* =========================================================
-   REALTIME
+   SEARCH
 ========================================================= */
 
-function initializeRealtime() {
+async function performSearch(
+    term
+) {
 
-    if (!supabaseClient) {
+    term =
+        String(term || "")
+            .trim();
+
+
+    if (!term) {
         return;
     }
 
 
-    /*
-     * Bejegyzések figyelése.
-     */
+    appState.searchTerm =
+        term;
 
-    supabaseClient
 
-        .channel(
-            "szeszi-posts"
-        )
+    const page =
+        $("#page");
 
-        .on(
-            "postgres_changes",
-            {
-                event: "*",
-                schema: "public",
-                table: "posts"
-            },
-            async () => {
 
-                if (
-                    appState.currentView ===
-                    "home"
-                ) {
+    page.innerHTML = `
 
-                    await renderCurrentView();
+        <div class="page-header">
+
+            <div>
+
+                <h1>Keresés</h1>
+
+                <p>
+                    Találatok erre: <strong>${escapeHTML(
+                        term
+                    )}</strong>
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="search-results">
+
+            <div class="loading-state">
+                Keresés...
+            </div>
+
+        </div>
+    `;
+
+
+    const [
+        postsResult,
+        questionsResult,
+        profilesResult
+    ] =
+        await Promise.all([
+
+            supabaseClient
+                .from("posts")
+                .select(`
+                    *,
+                    profiles (
+                        id,
+                        name,
+                        class_name,
+                        avatar_url
+                    )
+                `)
+                .ilike(
+                    "body",
+                    `%${term}%`
+                )
+                .limit(20),
+
+
+            supabaseClient
+                .from("questions")
+                .select(`
+                    *,
+                    profiles (
+                        id,
+                        name,
+                        class_name,
+                        avatar_url
+                    )
+                `)
+                .or(
+                    `title.ilike.%${term}%,body.ilike.%${term}%`
+                )
+                .limit(20),
+
+
+            supabaseClient
+                .from("profiles")
+                .select(`
+                    id,
+                    name,
+                    class_name,
+                    role,
+                    avatar_url
+                `)
+                .ilike(
+                    "name",
+                    `%${term}%`
+                )
+                .limit(20)
+
+        ]);
+
+
+    const results =
+        $(".search-results");
+
+
+    if (!results) {
+        return;
+    }
+
+
+    const posts =
+        postsResult.data || [];
+
+
+    const questions =
+        questionsResult.data || [];
+
+
+    const profiles =
+        profilesResult.data || [];
+
+
+    results.innerHTML = `
+
+        <section class="search-section">
+
+            <h2>
+                Felhasználók
+            </h2>
+
+
+            ${
+                profiles.length
+                ?
+                profiles.map(
+                    user => `
+
+                        <article
+                            class="search-user card"
+                        >
+
+                            ${avatarHTML(
+                                user,
+                                "small"
+                            )}
+
+                            <div>
+
+                                <strong>
+                                    ${escapeHTML(
+                                        user.name
+                                    )}
+                                </strong>
+
+                                <span>
+                                    ${
+                                        user.class_name
+                                        ?
+                                        escapeHTML(
+                                            user.class_name
+                                        )
+                                        :
+                                        ""
+                                    }
+                                </span>
+
+                            </div>
+
+                        </article>
+
+                    `
+                ).join("")
+                :
+                `<p class="muted">
+                    Nincs felhasználói találat.
+                </p>`
+            }
+
+        </section>
+
+
+        <section class="search-section">
+
+            <h2>
+                Bejegyzések
+            </h2>
+
+
+            ${
+                posts.length
+                ?
+                posts.map(
+                    renderPost
+                ).join("")
+                :
+                `<p class="muted">
+                    Nincs bejegyzés találat.
+                </p>`
+            }
+
+        </section>
+
+
+        <section class="search-section">
+
+            <h2>
+                Kérdések
+            </h2>
+
+
+            ${
+                questions.length
+                ?
+                questions.map(
+                    renderQuestion
+                ).join("")
+                :
+                `<p class="muted">
+                    Nincs kérdés találat.
+                </p>`
+            }
+
+        </section>
+    `;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+function renderEmptyState(
+    icon,
+    title,
+    text
+) {
+
+    return `
+
+        <div class="empty-state">
+
+            <div class="empty-icon">
+                ${icon}
+            </div>
+
+            <h3>
+                ${escapeHTML(
+                    title
+                )}
+            </h3>
+
+            <p>
+                ${escapeHTML(
+                    text
+                )}
+            </p>
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+
+function loadTheme() {
+
+    const saved =
+        localStorage.getItem(
+            "szeszi-theme"
+        );
+
+
+    appState.darkMode =
+        saved === "dark";
+
+
+    applyTheme();
+}
+
+
+function applyTheme() {
+
+    document.body.classList.toggle(
+        "dark-mode",
+        appState.darkMode
+    );
+
+
+    localStorage.setItem(
+        "szeszi-theme",
+        appState.darkMode
+            ? "dark"
+            : "light"
+    );
+}
+
+
+function toggleDarkMode(
+    checked
+) {
+
+    appState.darkMode =
+        Boolean(checked);
+
+
+    applyTheme();
+}
+
+
+/* =========================================================
+   EVENT DELEGATION
+========================================================= */
+
+function bindEvents() {
+
+
+    /* ---------------------------------------------
+       LOGIN
+    --------------------------------------------- */
+
+    $("#loginForm")?.addEventListener(
+        "submit",
+        handleLogin
+    );
+
+
+    /* ---------------------------------------------
+       REGISTER
+    --------------------------------------------- */
+
+    $("#registerForm")?.addEventListener(
+        "submit",
+        handleRegister
+    );
+
+
+    /* ---------------------------------------------
+       AUTH SWITCH
+    --------------------------------------------- */
+
+    $("#showRegister")?.addEventListener(
+        "click",
+        showRegister
+    );
+
+
+    $("#showLogin")?.addEventListener(
+        "click",
+        showLogin
+    );
+
+
+    /* ---------------------------------------------
+       MOBILE MENU
+    --------------------------------------------- */
+
+    $("#menuBtn")?.addEventListener(
+        "click",
+        toggleSidebar
+    );
+
+
+    /* ---------------------------------------------
+       NAVIGATION
+    --------------------------------------------- */
+
+    document.addEventListener(
+        "click",
+        event => {
+
+            const viewButton =
+                event.target.closest(
+                    "[data-view]"
+                );
+
+
+            if (
+                viewButton &&
+                !viewButton.id?.includes(
+                    "topAvatar"
+                )
+            ) {
+
+                const view =
+                    viewButton.dataset.view;
+
+
+                if (view) {
+
+                    event.preventDefault();
+
+                    navigate(view);
+                }
+            }
+        }
+    );
+
+
+    /* ---------------------------------------------
+       ACTIONS
+    --------------------------------------------- */
+
+    document.addEventListener(
+        "click",
+        async event => {
+
+            const button =
+                event.target.closest(
+                    "[data-action]"
+                );
+
+
+            if (!button) {
+                return;
+            }
+
+
+            const action =
+                button.dataset.action;
+
+
+            const id =
+                button.dataset.id;
+
+
+            try {
+
+                switch (action) {
+
+                    case "open-post-modal":
+                        openPostModal();
+                        break;
+
+
+                    case "like-post":
+                        await toggleLike(id);
+                        break;
+
+
+                    case "open-comments":
+                        await loadComments(id);
+                        break;
+
+
+                    case "save-post":
+                        await toggleSavePost(id);
+                        break;
+
+
+                    case "share-post":
+                        await sharePost(id);
+                        break;
+
+
+                    case "open-question-modal":
+                        openQuestionModal();
+                        break;
+
+
+                    case "open-question":
+                        await openQuestion(id);
+                        break;
+
+
+                    case "new-message":
+                        await openNewMessageModal();
+                        break;
+
+
+                    case "start-chat":
+                        await startPrivateChat(id);
+                        break;
+
+
+                    case "open-conversation":
+                        await openConversation(id);
+                        break;
+
+
+                    case "open-group-modal":
+                        openGroupModal();
+                        break;
+
+
+                    case "join-group":
+                        await joinGroup(id);
+                        break;
+
+
+                    case "edit-profile":
+                        openProfileEditor();
+                        break;
+
+
+                    case "logout":
+                        await logout();
+                        break;
+
+
+                    case "mark-notifications-read":
+                        await markNotificationsRead();
+                        break;
+
+
+                    case "open-announcement-modal":
+                        openAnnouncementModal();
+                        break;
+
+
+                    case "open-subject-modal":
+                        openSubjectModal();
+                        break;
+
+
+                    case "open-material-modal":
+                        openMaterialModal();
+                        break;
 
                 }
 
+            } catch (error) {
+
+                console.error(
+                    "Action error:",
+                    error
+                );
+
+                showToast(
+                    getErrorMessage(error),
+                    "error"
+                );
             }
-        )
+        }
+    );
 
-        .subscribe();
+
+    /* ---------------------------------------------
+       FORMOK
+    --------------------------------------------- */
+
+    document.addEventListener(
+        "submit",
+        async event => {
+
+            const form =
+                event.target;
 
 
-    /*
-     * Értesítések figyelése.
-     */
+            if (
+                form.id ===
+                "createPostForm"
+            ) {
+
+                await createPost(event);
+
+                return;
+            }
+
+
+            if (
+                form.matches(
+                    "[data-comment-form]"
+                )
+            ) {
+
+                await createComment(
+                    event,
+                    form.dataset.commentForm
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "createQuestionForm"
+            ) {
+
+                await createQuestion(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "answerQuestionForm"
+            ) {
+
+                await createAnswer(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "messageForm"
+            ) {
+
+                await sendMessage(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "createGroupForm"
+            ) {
+
+                await createGroup(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "editProfileForm"
+            ) {
+
+                await updateProfile(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "createAnnouncementForm"
+            ) {
+
+                await createAnnouncement(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "createSubjectForm"
+            ) {
+
+                await createSubject(
+                    event
+                );
+
+                return;
+            }
+
+
+            if (
+                form.id ===
+                "createMaterialForm"
+            ) {
+
+                await createMaterial(
+                    event
+                );
+
+                return;
+            }
+        }
+    );
+
+
+    /* ---------------------------------------------
+       DARK MODE
+    --------------------------------------------- */
+
+    document.addEventListener(
+        "change",
+        event => {
+
+            if (
+                event.target.id ===
+                "darkModeToggle"
+            ) {
+
+                toggleDarkMode(
+                    event.target.checked
+                );
+            }
+        }
+    );
+
+
+    /* ---------------------------------------------
+       GLOBAL SEARCH
+    --------------------------------------------- */
+
+    $("#globalSearch")?.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key !==
+                "Enter"
+            ) {
+                return;
+            }
+
+
+            const term =
+                event.target.value.trim();
+
+
+            if (!term) {
+                return;
+            }
+
+
+            event.preventDefault();
+
+            performSearch(term);
+        }
+    );
+}
+
+
+/* =========================================================
+   REALTIME NOTIFICATIONS
+========================================================= */
+
+function subscribeToNotifications() {
 
     if (
-        appState.currentUser
+        !supabaseClient ||
+        !appState.user
+    ) {
+        return;
+    }
+
+
+    if (
+        appState.notificationsChannel
     ) {
 
+        supabaseClient.removeChannel(
+            appState.notificationsChannel
+        );
+    }
+
+
+    appState.notificationsChannel =
         supabaseClient
-
             .channel(
-                `notifications-${appState.currentUser.id}`
+                `notifications-${appState.user.id}`
             )
-
             .on(
                 "postgres_changes",
                 {
@@ -5477,88 +6481,197 @@ function initializeRealtime() {
                     schema: "public",
                     table: "notifications",
                     filter:
-                        `user_id=eq.${appState.currentUser.id}`
+                        `user_id=eq.${appState.user.id}`
                 },
-                notification => {
+                payload => {
 
-                    appState.notifications
-                        .unshift(
-                            notification.new
-                        );
-
-                    updateNotificationBadge();
-
+                    showToast(
+                        `🔔 ${payload.new.text}`,
+                        "info"
+                    );
                 }
             )
-
             .subscribe();
-
-    }
-
 }
 
 
 /* =========================================================
-   ÉRTESÍTÉS JELZŐ
+   AUTH STATE
 ========================================================= */
 
-function updateNotificationBadge() {
+async function handleAuthState(
+    session
+) {
 
-    const badge =
-        $("#notificationBadge");
+    if (!session?.user) {
 
+        appState.user = null;
+        appState.profile = null;
 
-    if (!badge) {
+        showAuthScreen();
+
         return;
     }
 
 
-    const unread =
-        appState.notifications
-            .filter(
-                notification =>
-                    !notification.read
-            )
-            .length;
+    appState.user =
+        session.user;
 
 
-    if (!unread) {
+    await ensureProfile();
 
-        badge.hidden = true;
+    updateProfileUI();
 
-        return;
+    showMainApp();
 
-    }
+    subscribeToNotifications();
 
-
-    badge.hidden = false;
-
-    badge.textContent =
-        unread > 99
-            ? "99+"
-            : String(unread);
-
+    await navigate(
+        appState.currentView ||
+        "home"
+    );
 }
 
 
 /* =========================================================
-   ALKALMAZÁS INDÍTÁSA
+   SUPABASE INDÍTÁS
 ========================================================= */
 
-async function initializeApplication() {
+async function initializeSupabase() {
 
-    initializeTheme();
+    if (!supabaseClient) {
 
-    updateUserInterface();
+        showAuthScreen();
 
-    updateComposerAvatar();
+        const authContainer =
+            document.querySelector(
+                ".auth-container"
+            );
 
-    updateNavigation();
 
-    await renderCurrentView();
+        if (authContainer) {
 
-    initializeRealtime();
+            authContainer.innerHTML = `
 
+                <div class="auth-brand">
+
+                    <div class="auth-logo">
+                        S
+                    </div>
+
+                    <h1>
+                        SZESZI
+                    </h1>
+
+                    <p>
+                        Szigeti Endre Technikum
+                    </p>
+
+                </div>
+
+
+                <div class="auth-card">
+
+                    <div class="auth-header">
+
+                        <h2>
+                            Supabase beállítása szükséges
+                        </h2>
+
+                        <p>
+                            Az alkalmazás frontendje elkészült,
+                            de még nincs megadva a Supabase URL
+                            és az anon/publishable kulcs.
+                        </p>
+
+                    </div>
+
+
+                    <div class="setup-info">
+
+                        <p>
+                            Nyisd meg a
+                            <strong>
+                                supabase-config.js
+                            </strong>
+                            fájlt.
+                        </p>
+
+                        <p>
+                            A következő két értéket kell kitölteni:
+                        </p>
+
+                        <pre>{
+  url: "A_SUPABASE_URL",
+  anonKey: "A_SUPABASE_ANON_KULCS"
+}</pre>
+
+                        <p>
+                            A titkos
+                            <strong>
+                                service_role
+                            </strong>
+                            kulcsot soha ne tedd ebbe a fájlba.
+                        </p>
+
+                    </div>
+
+                </div>
+            `;
+
+        }
+
+        return;
+    }
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient.auth.getSession();
+
+
+    if (error) {
+
+        console.error(error);
+
+        showToast(
+            getErrorMessage(error),
+            "error"
+        );
+
+        showAuthScreen();
+
+        return;
+    }
+
+
+    await handleAuthState(
+        data.session
+    );
+
+
+    supabaseClient.auth.onAuthStateChange(
+        async (
+            _event,
+            session
+        ) => {
+
+            /*
+             * A Supabase callback közben
+             * nem végzünk túl sok műveletet.
+             */
+
+            setTimeout(
+                () =>
+                    handleAuthState(
+                        session
+                    ),
+                0
+            );
+        }
+    );
 }
 
 
@@ -5566,106 +6679,77 @@ async function initializeApplication() {
    SERVICE WORKER
 ========================================================= */
 
-function initializeServiceWorker() {
+function registerServiceWorker() {
 
     if (
-        "serviceWorker" in navigator
+        !("serviceWorker" in navigator)
     ) {
+        return;
+    }
 
-        window.addEventListener(
-            "load",
-            () => {
 
-                navigator.serviceWorker
-                    .register(
-                        "sw.js"
-                    )
-                    .then(
-                        registration => {
+    if (
+        location.protocol !==
+        "https:" &&
+        location.hostname !==
+        "localhost"
+    ) {
+        return;
+    }
 
-                            console.log(
-                                "SZESZI Service Worker aktív:",
-                                registration.scope
-                            );
 
-                        }
-                    )
-                    .catch(
-                        error => {
+    navigator.serviceWorker
+        .register(
+            "./sw.js"
+        )
+        .then(
+            registration => {
 
-                            console.warn(
-                                "Service Worker nem érhető el:",
-                                error
-                            );
+                console.log(
+                    "SZESZI Service Worker:",
+                    registration.scope
+                );
 
-                        }
-                    );
+            }
+        )
+        .catch(
+            error => {
+
+                console.warn(
+                    "Service Worker hiba:",
+                    error
+                );
 
             }
         );
-
-    }
-
 }
 
 
 /* =========================================================
-   INDÍTÁS
+   ALKALMAZÁS INDÍTÁSA
 ========================================================= */
 
-async function initializeApp() {
+async function init() {
 
-    initializeTheme();
+    loadTheme();
 
-    setupEventListeners();
+    bindModalClose();
 
-    initializeServiceWorker();
+    bindEvents();
 
+    showLogin();
 
-    /*
-     * Ha nincs még Supabase konfiguráció,
-     * az alkalmazás nem tölt be fiktív adatokat.
-     */
+    await initializeSupabase();
 
-    const supabaseReady =
-        await initializeSupabase();
-
-
-    if (!supabaseReady) {
-
-        showAuthScreen();
-
-        showToast(
-            "A SZESZI adatbázis-kapcsolata még nincs beállítva.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    await checkAuth();
-
+    registerServiceWorker();
 }
 
 
 /* =========================================================
-   DOM READY
+   START
 ========================================================= */
 
-if (
-    document.readyState ===
-    "loading"
-) {
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        initializeApp
-    );
-
-} else {
-
-    initializeApp();
-
-})
+document.addEventListener(
+    "DOMContentLoaded",
+    init
+);
