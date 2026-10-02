@@ -1,13 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="hu">
 
 <head>
-
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
 
     <meta
         name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        content="width=device-width, initial-scale=1, viewport-fit=cover"
     >
 
     <meta
@@ -17,7 +16,7 @@
 
     <meta
         name="description"
-        content="SZESZI – Szeghalmi Gyulai SZC Szigeti Endre Technikum közösségi és tanulási platformja"
+        content="SZESZI – Szigeti Endre Technikum közösségi és tanulási platform"
     >
 
     <meta
@@ -32,59 +31,39 @@
 
     <meta
         name="apple-mobile-web-app-status-bar-style"
-        content="black-translucent"
+        content="default"
     >
-
-    <meta
-        name="apple-mobile-web-app-title"
-        content="SZESZI"
-    >
-
-
-    <!-- PWA -->
 
     <link
         rel="manifest"
         href="manifest.json"
     >
 
-
-    <!-- STÍLUS -->
-
     <link
         rel="stylesheet"
         href="style.css"
     >
 
-
     <title>SZESZI</title>
-
 </head>
 
 
 <body>
 
-
-<!-- =========================================================
-     ALKALMAZÁS
-========================================================= -->
-
 <div id="app">
 
 
     <!-- =====================================================
-         BEJELENTKEZÉSI / REGISZTRÁCIÓS FELÜLET
+         AUTHENTIKÁCIÓS FELÜLET
     ====================================================== -->
 
     <section
         id="authScreen"
         class="auth-screen"
+        hidden
     >
 
         <div class="auth-container">
-
-
-            <!-- LOGÓ -->
 
             <div class="auth-brand">
 
@@ -92,20 +71,16 @@
                     S
                 </div>
 
-                <div>
+                <h1>SZESZI</h1>
 
-                    <h1>SZESZI</h1>
-
-                    <p>
-                        Szigeti Endre Technikum
-                    </p>
-
-                </div>
+                <p>
+                    Szigeti Endre Technikum
+                </p>
 
             </div>
 
 
-            <!-- BEJELENTKEZÉS -->
+            <!-- LOGIN -->
 
             <div
                 id="loginView"
@@ -117,7 +92,7 @@
                     <h2>Bejelentkezés</h2>
 
                     <p>
-                        Jelentkezz be a SZESZI-fiókodba.
+                        Jelentkezz be a SZESZI-be.
                     </p>
 
                 </div>
@@ -125,19 +100,17 @@
 
                 <form id="loginForm">
 
-
                     <div class="form-group">
 
                         <label for="loginEmail">
-                            E-mail-cím
+                            E-mail cím
                         </label>
 
                         <input
-                            type="email"
                             id="loginEmail"
-                            name="email"
-                            placeholder="pelda@email.hu"
+                            type="email"
                             autocomplete="email"
+                            placeholder="pelda@email.hu"
                             required
                         >
 
@@ -151,11 +124,10 @@
                         </label>
 
                         <input
-                            type="password"
                             id="loginPassword"
-                            name="password"
-                            placeholder="Jelszó"
+                            type="password"
                             autocomplete="current-password"
+                            placeholder="Jelszó"
                             required
                         >
 
@@ -164,16 +136,15 @@
 
                     <button
                         type="submit"
-                        class="btn primary full-width"
+                        class="primary-btn full-width"
                     >
                         Bejelentkezés
                     </button>
 
-
                 </form>
 
 
-                <div class="auth-footer">
+                <div class="auth-switch">
 
                     <span>
                         Még nincs fiókod?
@@ -192,7 +163,7 @@
             </div>
 
 
-            <!-- REGISZTRÁCIÓ -->
+            <!-- REGISTER -->
 
             <div
                 id="registerView"
@@ -205,14 +176,13 @@
                     <h2>Fiók létrehozása</h2>
 
                     <p>
-                        Csatlakozz az iskolai közösséghez.
+                        Csatlakozz a SZESZI közösségéhez.
                     </p>
 
                 </div>
 
 
                 <form id="registerForm">
-
 
                     <div class="form-group">
 
@@ -221,12 +191,12 @@
                         </label>
 
                         <input
-                            type="text"
                             id="registerName"
-                            name="name"
-                            placeholder="Teljes neved"
+                            type="text"
                             autocomplete="name"
+                            placeholder="Teljes neved"
                             required
+                            maxlength="100"
                         >
 
                     </div>
@@ -235,64 +205,16 @@
                     <div class="form-group">
 
                         <label for="registerEmail">
-                            E-mail-cím
+                            E-mail cím
                         </label>
 
                         <input
-                            type="email"
                             id="registerEmail"
-                            name="email"
-                            placeholder="pelda@email.hu"
+                            type="email"
                             autocomplete="email"
+                            placeholder="pelda@email.hu"
                             required
                         >
-
-                    </div>
-
-
-                    <div class="form-row">
-
-
-                        <div class="form-group">
-
-                            <label for="registerClass">
-                                Osztály
-                            </label>
-
-                            <input
-                                type="text"
-                                id="registerClass"
-                                name="class"
-                                placeholder="Pl. 11.A"
-                                required
-                            >
-
-                        </div>
-
-
-                        <div class="form-group">
-
-                            <label for="registerRole">
-                                Szerepkör
-                            </label>
-
-                            <select
-                                id="registerRole"
-                                name="role"
-                            >
-
-                                <option value="student">
-                                    Diák
-                                </option>
-
-                                <option value="teacher">
-                                    Tanár
-                                </option>
-
-                            </select>
-
-                        </div>
-
 
                     </div>
 
@@ -304,12 +226,11 @@
                         </label>
 
                         <input
-                            type="password"
                             id="registerPassword"
-                            name="password"
-                            placeholder="Legalább 8 karakter"
+                            type="password"
                             autocomplete="new-password"
-                            minlength="8"
+                            placeholder="Legalább 6 karakter"
+                            minlength="6"
                             required
                         >
 
@@ -319,17 +240,48 @@
                     <div class="form-group">
 
                         <label for="registerPasswordConfirm">
-                            Jelszó megerősítése
+                            Jelszó újra
                         </label>
 
                         <input
-                            type="password"
                             id="registerPasswordConfirm"
-                            name="passwordConfirm"
-                            placeholder="Jelszó újra"
+                            type="password"
                             autocomplete="new-password"
-                            minlength="8"
+                            placeholder="Jelszó újra"
+                            minlength="6"
                             required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="registerClass">
+                            Osztály
+                        </label>
+
+                        <input
+                            id="registerClass"
+                            type="text"
+                            placeholder="Például: 10.A"
+                            maxlength="30"
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="registerSpecialization">
+                            Szak / képzés
+                        </label>
+
+                        <input
+                            id="registerSpecialization"
+                            type="text"
+                            placeholder="Szak vagy képzés"
+                            maxlength="100"
                         >
 
                     </div>
@@ -337,16 +289,15 @@
 
                     <button
                         type="submit"
-                        class="btn primary full-width"
+                        class="primary-btn full-width"
                     >
                         Regisztráció
                     </button>
 
-
                 </form>
 
 
-                <div class="auth-footer">
+                <div class="auth-switch">
 
                     <span>
                         Már van fiókod?
@@ -364,7 +315,6 @@
 
             </div>
 
-
         </div>
 
     </section>
@@ -375,71 +325,54 @@
          FŐ ALKALMAZÁS
     ====================================================== -->
 
-    <div
+    <section
         id="mainApp"
         hidden
     >
 
 
         <!-- =================================================
-             FELSŐ NAVIGÁCIÓ
+             TOPBAR
         ================================================== -->
 
         <header class="topbar">
 
-
-            <div class="topbar-left">
-
-
-                <button
-                    type="button"
-                    class="icon-btn mobile-only"
-                    id="menuBtn"
-                    aria-label="Menü megnyitása"
-                >
-                    ☰
-                </button>
+            <button
+                class="icon-btn mobile-only"
+                id="menuBtn"
+                type="button"
+                aria-label="Menü"
+            >
+                ☰
+            </button>
 
 
-                <button
-                    type="button"
-                    class="brand-button"
-                    data-view="home"
-                >
+            <div class="brand">
 
-                    <span class="brand-mark">
-                        S
-                    </span>
+                <span class="brand-mark">
+                    S
+                </span>
 
-                    <span class="brand-text">
+                <div>
 
-                        <strong>
-                            SZESZI
-                        </strong>
+                    <strong>
+                        SZESZI
+                    </strong>
 
-                        <small>
-                            Szigeti Endre Technikum
-                        </small>
+                    <small>
+                        Szigeti Endre Technikum
+                    </small>
 
-                    </span>
-
-                </button>
-
+                </div>
 
             </div>
 
 
-            <!-- KERESŐ -->
-
             <div class="top-search">
 
-                <span class="search-icon">
-                    🔎
-                </span>
-
                 <input
-                    type="search"
                     id="globalSearch"
+                    type="search"
                     placeholder="Keresés a SZESZI-ben…"
                     autocomplete="off"
                 >
@@ -447,62 +380,43 @@
             </div>
 
 
-            <!-- JOBB OLDAL -->
-
-            <div class="topbar-actions">
-
+            <div class="top-actions">
 
                 <button
-                    type="button"
                     class="icon-btn"
                     data-view="notifications"
+                    type="button"
                     aria-label="Értesítések"
                 >
                     🔔
-
-                    <span
-                        id="notificationBadge"
-                        class="notification-badge"
-                        hidden
-                    >
-                        0
-                    </span>
-
                 </button>
 
 
                 <button
-                    type="button"
-                    class="user-button"
+                    class="avatar small"
                     data-view="profile"
+                    id="topAvatar"
+                    type="button"
+                    aria-label="Profil"
                 >
-
-                    <span
-                        id="topAvatar"
-                        class="avatar small"
-                    >
-                        ?
-                    </span>
-
+                    ?
                 </button>
 
-
             </div>
-
 
         </header>
 
 
 
         <!-- =================================================
-             OLDALSÁV + TARTALOM
+             LAYOUT
         ================================================== -->
 
-        <div class="app-layout">
+        <div class="layout">
 
 
             <!-- =================================================
-                 OLDALSÁV
+                 SIDEBAR
             ================================================== -->
 
             <aside
@@ -510,216 +424,151 @@
                 id="sidebar"
             >
 
-
-                <nav class="sidebar-nav">
-
+                <nav>
 
                     <button
-                        type="button"
                         class="nav-item active"
                         data-view="home"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            🏠
-                        </span>
-
+                        🏠
                         <span>
                             Kezdőlap
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="questions"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            ❓
-                        </span>
-
+                        ❓
                         <span>
                             Kérdések
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="messages"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            💬
-                        </span>
-
+                        💬
                         <span>
                             Üzenetek
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="groups"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            👥
-                        </span>
-
+                        👥
                         <span>
                             Csoportok
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="subjects"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            📚
-                        </span>
-
+                        📚
                         <span>
                             Tantárgyak
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="materials"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            📖
-                        </span>
-
+                        📖
                         <span>
                             Tananyagok
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="announcements"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            📢
-                        </span>
-
+                        📢
                         <span>
                             Iskolai hírek
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="saved"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            🔖
-                        </span>
-
+                        🔖
                         <span>
                             Mentések
                         </span>
-
                     </button>
 
 
-                    <div class="sidebar-divider"></div>
-
-
                     <button
-                        type="button"
                         class="nav-item"
                         data-view="profile"
+                        type="button"
                     >
-
-                        <span class="nav-icon">
-                            👤
-                        </span>
-
+                        👤
                         <span>
                             Profil
                         </span>
-
                     </button>
 
 
                     <button
-                        type="button"
                         class="nav-item"
-                        data-view="settings"
-                    >
-
-                        <span class="nav-icon">
-                            ⚙️
-                        </span>
-
-                        <span>
-                            Beállítások
-                        </span>
-
-                    </button>
-
-
-                    <!-- ADMIN -->
-
-                    <button
-                        type="button"
-                        class="nav-item"
-                        id="adminNav"
                         data-view="admin"
+                        id="adminNav"
+                        type="button"
                         hidden
                     >
-
-                        <span class="nav-icon">
-                            🛡️
-                        </span>
-
+                        🛡️
                         <span>
-                            Adminisztráció
+                            Admin
                         </span>
-
                     </button>
-
 
                 </nav>
 
 
-                <!-- ISKOLAI INFORMÁCIÓ -->
+                <div>
 
-                <div class="sidebar-bottom">
+                    <button
+                        class="nav-item"
+                        data-view="settings"
+                        type="button"
+                    >
+                        ⚙️
+                        <span>
+                            Beállítások
+                        </span>
+                    </button>
 
-                    <div class="school-info">
 
-                        <strong>
+                    <div class="school-card">
+
+                        <b>
                             SZESZI
-                        </strong>
+                        </b>
 
                         <span>
                             Iskolai közösség
@@ -729,157 +578,140 @@
 
                 </div>
 
-
             </aside>
 
 
 
             <!-- =================================================
-                 FŐ TARTALOM
+                 CONTENT
             ================================================== -->
 
-            <main
-                class="main-content"
-                id="mainContent"
-            >
+            <main class="content">
 
                 <div id="page"></div>
 
             </main>
-
 
         </div>
 
 
 
         <!-- =================================================
-             MOBIL ALSÓ NAVIGÁCIÓ
+             MOBILE NAV
         ================================================== -->
 
-        <nav class="mobile-bottom-nav">
-
+        <nav class="bottom-nav">
 
             <button
-                type="button"
                 data-view="home"
-            >
-
-                <span>🏠</span>
-                <small>Kezdőlap</small>
-
-            </button>
-
-
-            <button
                 type="button"
-                data-view="questions"
             >
-
-                <span>❓</span>
-                <small>Kérdések</small>
-
-            </button>
-
-
-            <button
-                type="button"
-                class="mobile-create-button"
-                id="mobileCreate"
-                aria-label="Új tartalom létrehozása"
-            >
-
+                🏠
                 <span>
-                    ＋
+                    Kezdőlap
                 </span>
-
             </button>
 
 
             <button
+                data-view="questions"
                 type="button"
+            >
+                ❓
+                <span>
+                    Kérdések
+                </span>
+            </button>
+
+
+            <button
+                class="create-btn"
+                id="mobileCreate"
+                type="button"
+                aria-label="Új tartalom"
+            >
+                ＋
+            </button>
+
+
+            <button
                 data-view="messages"
+                type="button"
             >
-
-                <span>💬</span>
-                <small>Üzenetek</small>
-
+                💬
+                <span>
+                    Üzenetek
+                </span>
             </button>
 
 
             <button
-                type="button"
                 data-view="profile"
+                type="button"
             >
-
-                <span>👤</span>
-                <small>Profil</small>
-
+                👤
+                <span>
+                    Profil
+                </span>
             </button>
-
 
         </nav>
 
-
-    </div>
-
-
-
-    <!-- =====================================================
-         MODAL
-    ====================================================== -->
-
-    <div
-        class="modal"
-        id="modal"
-        hidden
-    >
-
-        <div
-            class="modal-backdrop"
-            data-close-modal
-        ></div>
-
-
-        <section class="modal-card">
-
-
-            <button
-                type="button"
-                class="modal-close"
-                data-close-modal
-                aria-label="Bezárás"
-            >
-                ×
-            </button>
-
-
-            <div id="modalContent"></div>
-
-
-        </section>
-
-    </div>
-
-
-
-    <!-- =====================================================
-         ÉRTESÍTÉSI ÜZENET
-    ====================================================== -->
-
-    <div
-        id="toast"
-        class="toast"
-        aria-live="polite"
-    ></div>
-
+    </section>
 
 </div>
 
 
 
 <!-- =========================================================
-     JAVASCRIPT
-========================================================= -->
+     MODAL
+========================================================== -->
+
+<div
+    class="modal"
+    id="modal"
+    hidden
+>
+
+    <div
+        class="modal-backdrop"
+        data-close-modal
+    ></div>
+
+
+    <section class="modal-card">
+
+        <button
+            class="modal-close"
+            data-close-modal
+            type="button"
+            aria-label="Bezárás"
+        >
+            ×
+        </button>
+
+
+        <div id="modalContent"></div>
+
+    </section>
+
+</div>
+
+
+
+<!-- =========================================================
+     TOAST
+========================================================== -->
+
+<div id="toast"></div>
+
+
+
+<!-- =========================================================
+     SCRIPTS
+========================================================== -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script src="supabase-config.js"></script>
 
