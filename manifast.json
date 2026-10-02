@@ -1,0 +1,21 @@
+{
+  "name": "SZESZI – Szigeti Endre Technikum",
+  "short_name": "SZESZI",
+  "description": "A Szigeti Endre Technikum közösségi és tanulási platformja.",
+  "lang": "hu",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+
+  "background_color": "#f4f7fb",
+  "theme_color": "#111827",
+
+  "categories": [
+    "education",
+    "social",
+    "productivity"
+  ],
+
+  "icons": []
+}
